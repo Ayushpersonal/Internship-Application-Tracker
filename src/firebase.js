@@ -18,13 +18,29 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = typeof window !== "undefined" ? getAnalytics(app) : null;
-const auth = getAuth(app);
-const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope("https://www.googleapis.com/auth/gmail.readonly");
-const db = getFirestore(app);
+let app = null;
+let analytics = null;
+let auth = null;
+let googleProvider = null;
+let db = null;
+
+// Initialize Firebase only if the API key is provided
+const isConfigValid = firebaseConfig.apiKey && firebaseConfig.apiKey !== "undefined" && firebaseConfig.apiKey !== "";
+
+if (isConfigValid) {
+  try {
+    app = initializeApp(firebaseConfig);
+    analytics = typeof window !== "undefined" ? getAnalytics(app) : null;
+    auth = getAuth(app);
+    googleProvider = new GoogleAuthProvider();
+    googleProvider.addScope("https://www.googleapis.com/auth/gmail.readonly");
+    db = getFirestore(app);
+  } catch (error) {
+    console.error("Firebase failed to initialize:", error);
+  }
+} else {
+  console.warn("Firebase API key is missing. Running CareerFly in Sandbox Mock Mode.");
+}
 
 export { app, analytics, auth, googleProvider, db };
 
