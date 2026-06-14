@@ -398,15 +398,36 @@ export default function App() {
   // KANBAN TRACKER STATE & ACTIONS
   // ==========================================
 
+  const getRelativeDateStr = (daysAgo) => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    return d.toISOString().split('T')[0];
+  };
+
   // Default starter applications shown to new users
   const DEFAULT_APPS = [
-    { id: 'app-google', company: 'Google', role: 'Software Eng Intern', priority: 'High Priority', status: 'applied', logoClass: 'logo-google', logoLetter: 'G' },
-    { id: 'app-meta', company: 'Meta', role: 'Product Manager Intern', priority: 'Medium', status: 'applied', logoClass: 'logo-meta', logoLetter: 'M' },
-    { id: 'app-stripe', company: 'Stripe', role: 'Backend Engineer', priority: 'High Priority', status: 'applied', logoClass: 'logo-stripe', logoLetter: 'S' },
-    { id: 'app-netflix', company: 'Netflix', role: 'UI/UX Engineer', priority: 'Technical Round', status: 'interviewing', logoClass: 'logo-netflix', logoLetter: 'N' },
-    { id: 'app-airbnb', company: 'Airbnb', role: 'Frontend Developer', priority: 'Behavioral Round', status: 'interviewing', logoClass: 'logo-airbnb', logoLetter: 'A' },
-    { id: 'app-vercel', company: 'Vercel', role: 'Next.js Dev Intern', priority: 'Active Offer', status: 'offer', logoClass: 'logo-vercel', logoLetter: '▲' }
+    { id: 'app-google', company: 'Google', role: 'Software Eng Intern', priority: 'High Priority', status: 'applied', logoClass: 'logo-google', logoLetter: 'G', appliedDate: getRelativeDateStr(3), followUp3Done: false, followUp7Done: false },
+    { id: 'app-meta', company: 'Meta', role: 'Product Manager Intern', priority: 'Medium', status: 'applied', logoClass: 'logo-meta', logoLetter: 'M', appliedDate: getRelativeDateStr(7), followUp3Done: false, followUp7Done: false },
+    { id: 'app-stripe', company: 'Stripe', role: 'Backend Engineer', priority: 'High Priority', status: 'applied', logoClass: 'logo-stripe', logoLetter: 'S', appliedDate: getRelativeDateStr(0), followUp3Done: false, followUp7Done: false },
+    { id: 'app-netflix', company: 'Netflix', role: 'UI/UX Engineer', priority: 'Technical Round', status: 'interviewing', logoClass: 'logo-netflix', logoLetter: 'N', appliedDate: getRelativeDateStr(10), responseDate: getRelativeDateStr(8) },
+    { id: 'app-airbnb', company: 'Airbnb', role: 'Frontend Developer', priority: 'Behavioral Round', status: 'interviewing', logoClass: 'logo-airbnb', logoLetter: 'A', appliedDate: getRelativeDateStr(12), responseDate: getRelativeDateStr(10) },
+    { id: 'app-vercel', company: 'Vercel', role: 'Next.js Dev Intern', priority: 'Active Offer', status: 'offer', logoClass: 'logo-vercel', logoLetter: '▲', appliedDate: getRelativeDateStr(15), responseDate: getRelativeDateStr(12) }
   ];
+
+  const patchApps = (apps) => {
+    if (!Array.isArray(apps)) return [];
+    return apps.map(app => {
+      if (app.status === 'applied' && !app.appliedDate) {
+        return {
+          ...app,
+          appliedDate: new Date().toISOString().split('T')[0],
+          followUp3Done: !!app.followUp3Done,
+          followUp7Done: !!app.followUp7Done
+        };
+      }
+      return app;
+    });
+  };
 
   // Initialize from localStorage cache for instant load (Firestore will sync over it)
   const [applications, setApplications] = useState(() => {
@@ -415,7 +436,7 @@ export default function App() {
       const userKey = savedUser ? JSON.parse(savedUser).uid : null;
       if (userKey) {
         const cached = localStorage.getItem(`applications_${userKey}`);
-        if (cached) return JSON.parse(cached);
+        if (cached) return patchApps(JSON.parse(cached));
       }
     } catch (e) {}
     return DEFAULT_APPS;
@@ -444,15 +465,16 @@ export default function App() {
 
       if (snapshot.exists()) {
         const cloudApps = snapshot.data().apps || [];
-        setApplications(cloudApps);
+        const patchedApps = patchApps(cloudApps);
+        setApplications(patchedApps);
         // Keep localStorage cache fresh
         try {
-          localStorage.setItem(`applications_${currentUser.uid}`, JSON.stringify(cloudApps));
+          localStorage.setItem(`applications_${currentUser.uid}`, JSON.stringify(patchedApps));
         } catch (e) {}
       } else {
         // No cloud document yet — seed Firestore with current local data
         const localCached = localStorage.getItem(`applications_${currentUser.uid}`);
-        const seedData = localCached ? JSON.parse(localCached) : DEFAULT_APPS;
+        const seedData = localCached ? patchApps(JSON.parse(localCached)) : DEFAULT_APPS;
         firestoreWritePending.current = true;
         setDoc(userDocRef, { apps: seedData, updatedAt: serverTimestamp() })
           .then(() => setCloudSyncStatus('saved'))
@@ -529,7 +551,15 @@ export default function App() {
         } else if (app.priority === 'Active Offer') {
           updatedPriority = itemId.includes('google') || itemId.includes('stripe') ? 'High Priority' : 'Medium';
         }
-        return { ...app, status: targetStatus, priority: updatedPriority };
+        const extraFields = {};
+        if (targetStatus === 'applied') {
+          extraFields.appliedDate = new Date().toISOString().split('T')[0];
+          extraFields.followUp3Done = false;
+          extraFields.followUp7Done = false;
+        } else if (targetStatus === 'interviewing' || targetStatus === 'offer') {
+          extraFields.responseDate = new Date().toISOString().split('T')[0];
+        }
+        return { ...app, status: targetStatus, priority: updatedPriority, ...extraFields };
       }
       return app;
     }));
@@ -557,7 +587,10 @@ export default function App() {
       priority: newStatus === 'offer' ? 'Active Offer' : newPriority,
       status: newStatus,
       logoLetter: newCompany.trim().charAt(0).toUpperCase(),
-      customBg: customBg
+      customBg: customBg,
+      appliedDate: newStatus === 'applied' ? new Date().toISOString().split('T')[0] : null,
+      followUp3Done: false,
+      followUp7Done: false
     };
 
     setApplications(prev => [...prev, newCardObj]);
@@ -756,7 +789,7 @@ export default function App() {
   // ==========================================
   // INTERVIEW CALENDAR & AGENDAS
   // ==========================================
-  const [selectedDay, setSelectedDay] = useState(2);
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
   const [quickTaskText, setQuickTaskText] = useState('');
   
   const [agendaDatabase, setAgendaDatabase] = useState({
@@ -782,17 +815,73 @@ export default function App() {
     ]
   });
 
-  const currentTasks = agendaDatabase[selectedDay] || [];
+  const getDayEvents = (dayNum) => {
+    const autoTasks = [];
+    applications.forEach(app => {
+      if (app.status === 'applied' && app.appliedDate) {
+        const [year, month, day] = app.appliedDate.split('-').map(Number);
+        const appliedDateObj = new Date(year, month - 1, day);
+        const calendarDate = new Date(2026, 5, dayNum); // June 2026
+        const diffTime = calendarDate.getTime() - appliedDateObj.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 3) {
+          autoTasks.push({
+            title: `Send follow-up email to ${app.company} (3 days after applying)`,
+            time: '9:00 AM',
+            done: !!app.followUp3Done,
+            isAutoGenerated: true,
+            appId: app.id,
+            type: 'followUp3Done'
+          });
+        } else if (diffDays === 7) {
+          autoTasks.push({
+            title: `Send follow-up email to ${app.company} (7 days after applying)`,
+            time: '9:00 AM',
+            done: !!app.followUp7Done,
+            isAutoGenerated: true,
+            appId: app.id,
+            type: 'followUp7Done'
+          });
+        }
+      }
+    });
+
+    const manualTasks = agendaDatabase[dayNum] || [];
+    return [...autoTasks, ...manualTasks];
+  };
+
+  const combinedAgendaDatabase = {};
+  for (let d = 1; d <= 30; d++) {
+    const events = getDayEvents(d);
+    if (events.length > 0) {
+      combinedAgendaDatabase[d] = events;
+    }
+  }
+
+  const currentTasks = combinedAgendaDatabase[selectedDay] || [];
   const remainingTasksCount = currentTasks.filter(t => !t.done).length;
 
-  const handleToggleTask = (taskIndex) => {
-    setAgendaDatabase(prev => {
-      const dayTasks = prev[selectedDay] ? [...prev[selectedDay]] : [];
-      if (dayTasks[taskIndex]) {
-        dayTasks[taskIndex] = { ...dayTasks[taskIndex], done: !dayTasks[taskIndex].done };
-      }
-      return { ...prev, [selectedDay]: dayTasks };
-    });
+  const handleToggleTask = (task) => {
+    if (task && task.isAutoGenerated) {
+      setApplications(prev => prev.map(app => {
+        if (app.id === task.appId) {
+          return { ...app, [task.type]: !task.done };
+        }
+        return app;
+      }));
+    } else {
+      setAgendaDatabase(prev => {
+        const dayTasks = prev[selectedDay] ? [...prev[selectedDay]] : [];
+        const updatedTasks = dayTasks.map(t => {
+          if (t.title === task.title && t.time === task.time) {
+            return { ...t, done: !t.done };
+          }
+          return t;
+        });
+        return { ...prev, [selectedDay]: updatedTasks };
+      });
+    }
   };
 
   const handleQuickAddTask = (e) => {
@@ -901,7 +990,6 @@ export default function App() {
                 <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>Manage Internship</Link>
                 <Link to="/outreach" className={`nav-link ${location.pathname === '/outreach' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>AI Outreach</Link>
                 <Link to="/resume" className={`nav-link ${location.pathname === '/resume' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>Resume Analyzer</Link>
-                <Link to="/calendar" className={`nav-link ${location.pathname === '/calendar' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>Schedules</Link>
                 <Link to="/interview" className={`nav-link ${location.pathname === '/interview' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>AI Interview</Link>
               </>
             ) : (
@@ -1073,22 +1161,7 @@ export default function App() {
             ) : <Navigate to="/login?redirect=/resume" replace />
           } />
 
-          <Route path="/calendar" element={
-            currentUser ? (
-              <CalendarPage
-                selectedDay={selectedDay}
-                setSelectedDay={setSelectedDay}
-                remainingTasksCount={remainingTasksCount}
-                daysInJune={daysInJune}
-                agendaDatabase={agendaDatabase}
-                currentTasks={currentTasks}
-                handleToggleTask={handleToggleTask}
-                quickTaskText={quickTaskText}
-                setQuickTaskText={setQuickTaskText}
-                handleQuickAddTask={handleQuickAddTask}
-              />
-            ) : <Navigate to="/login?redirect=/calendar" replace />
-          } />
+
 
           <Route path="/login" element={
             <LoginPage
@@ -1138,6 +1211,16 @@ export default function App() {
                 handleDragStart={handleDragStart}
                 handleMoveItem={handleMoveItem}
                 getTagClass={getTagClass}
+                selectedDay={selectedDay}
+                setSelectedDay={setSelectedDay}
+                remainingTasksCount={remainingTasksCount}
+                daysInJune={daysInJune}
+                agendaDatabase={combinedAgendaDatabase}
+                currentTasks={currentTasks}
+                handleToggleTask={handleToggleTask}
+                quickTaskText={quickTaskText}
+                setQuickTaskText={setQuickTaskText}
+                handleQuickAddTask={handleQuickAddTask}
               />
             ) : (
               <LandingPage
@@ -1178,7 +1261,6 @@ export default function App() {
               <Link to="/" className="footer-link">Tracker</Link>
               <Link to="/outreach" className="footer-link">Outreach</Link>
               <Link to="/resume" className="footer-link">ATS Scanner</Link>
-              <Link to="/calendar" className="footer-link">Calendar</Link>
             </div>
           </div>
         </div>

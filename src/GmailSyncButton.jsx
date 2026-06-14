@@ -65,6 +65,69 @@ export default function GmailSyncButton({ accessToken, userId, setApplications, 
   };
 
   /**
+   * Extract the job role title from the email subject or snippet.
+   * If not mentioned, returns an empty string "".
+   */
+  const parseEmailForRole = (subject, snippet) => {
+    const combined = (subject + ' ' + snippet).replace(/\s+/g, ' ');
+    
+    // Pattern 1: Match role description phrases
+    const patterns = [
+      /position\s+of\s+([a-zA-Z0-9\s&\-\/]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
+      /application\s+(?:for|to)\s+(?:the\s+)?([a-zA-Z0-9\s&\-\/]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
+      /applying\s+(?:for|to)\s+(?:the\s+)?([a-zA-Z0-9\s&\-\/]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
+      /role\s+as\s+(?:a\s+)?([a-zA-Z0-9\s&\-\/]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
+      /job\s+title\s*:\s*([a-zA-Z0-9\s&\-\/]+)/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = combined.match(pattern);
+      if (match && match[1]?.trim().length > 1) {
+        let role = match[1].trim();
+        // Clean up trailing context
+        role = role.replace(/\s+(?:at|with|for)\s+[A-Z][a-zA-Z0-9\s]*$/, '').trim();
+        return role.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      }
+    }
+
+    // Pattern 2: Search for common role names directly
+    const commonRoles = [
+      /software\s+engineer(?:\s+intern)?/i,
+      /frontend\s+(?:engineer|developer)(?:\s+intern)?/i,
+      /backend\s+(?:engineer|developer)(?:\s+intern)?/i,
+      /fullstack\s+(?:engineer|developer)(?:\s+intern)?/i,
+      /data\s+scientist(?:\s+intern)?/i,
+      /product\s+manager(?:\s+intern)?/i,
+      /ux\s+designer(?:\s+intern)?/i,
+      /ui\s+designer(?:\s+intern)?/i,
+      /cloud\s+engineer(?:\s+intern)?/i,
+      /data\s+engineer(?:\s+intern)?/i,
+      /devops\s+engineer(?:\s+intern)?/i,
+      /ml\s+engineer(?:\s+intern)?/i,
+      /machine\s+learning\s+engineer(?:\s+intern)?/i,
+      /systems\s+engineer(?:\s+intern)?/i,
+      /hardware\s+engineer(?:\s+intern)?/i,
+      /security\s+analyst(?:\s+intern)?/i,
+      /cybersecurity\s+engineer(?:\s+intern)?/i,
+      /mobile\s+developer(?:\s+intern)?/i,
+      /ios\s+developer(?:\s+intern)?/i,
+      /android\s+developer(?:\s+intern)?/i,
+      /technical\s+program\s+manager(?:\s+intern)?/i,
+      /business\s+analyst(?:\s+intern)?/i,
+      /internship/i
+    ];
+
+    for (const regex of commonRoles) {
+      const match = combined.match(regex);
+      if (match) {
+        return match[0].split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      }
+    }
+
+    return ""; // Empty role to let the user manually enter it
+  };
+
+  /**
    * Fetch and parse Gmail messages to extract internship details.
    */
   const fetchGmailApplications = async (token) => {
@@ -112,39 +175,91 @@ export default function GmailSyncButton({ accessToken, userId, setApplications, 
       try {
         const detailRes = await gapi.client.request({
           path: `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgInfo.id}`,
-          params: { format: 'metadata', metadataHeaders: ['Subject', 'From'] }
+          params: { format: 'metadata', metadataHeaders: ['Subject', 'From', 'Date'] }
         });
         const emailDetails = detailRes.result;
         const subjectHeader = emailDetails.payload?.headers?.find(h => h.name === 'Subject');
         const subject = subjectHeader?.value || '';
         const snippet = emailDetails.snippet || '';
+        const dateHeader = emailDetails.payload?.headers?.find(h => h.name === 'Date');
+
+        let formattedEmailDate = new Date().toISOString().split('T')[0];
+        if (dateHeader?.value) {
+          try {
+            const parsedDate = new Date(dateHeader.value);
+            if (!isNaN(parsedDate.getTime())) {
+              formattedEmailDate = parsedDate.toISOString().split('T')[0];
+            }
+          } catch (e) {
+            console.warn("Failed to parse email date:", e);
+          }
+        }
 
         const companyName = parseEmailForCompany(subject, snippet);
         if (!companyName) continue;
 
+        const parsedRole = parseEmailForRole(subject, snippet);
         const { status, priority } = classifyStage(subject, snippet);
 
         setApplications(prev => {
-          const exists = prev.some(app => app.company.toLowerCase() === companyName.toLowerCase());
+          // Filter out preloaded placeholder cards
+          const DEFAULT_IDS = ['app-google', 'app-meta', 'app-stripe', 'app-netflix', 'app-airbnb', 'app-vercel'];
+          const cleanPrev = prev.filter(app => !DEFAULT_IDS.includes(app.id));
+
+          const exists = cleanPrev.some(app => app.company.toLowerCase() === companyName.toLowerCase());
           if (exists) {
-            return prev.map(app => {
+            return cleanPrev.map(app => {
               if (app.company.toLowerCase() === companyName.toLowerCase()) {
-                return { ...app, status, priority, animateTrigger: true };
+                const extraFields = {};
+                if (status === 'applied') {
+                  if (!app.appliedDate) {
+                    extraFields.appliedDate = formattedEmailDate;
+                  }
+                  extraFields.followUp3Done = false;
+                  extraFields.followUp7Done = false;
+                } else if (status === 'interviewing' || status === 'offer') {
+                  extraFields.responseDate = formattedEmailDate;
+                }
+                // Only overwrite role if it's currently generic or empty
+                const updatedRole = app.role && app.role !== 'Synced via Gmail' ? app.role : parsedRole;
+                return { 
+                  ...app, 
+                  role: updatedRole, 
+                  status, 
+                  priority, 
+                  animateTrigger: true,
+                  emailSubject: subject,
+                  emailSnippet: snippet,
+                  emailDate: formattedEmailDate,
+                  ...extraFields 
+                };
               }
               return app;
             });
           } else {
+            const extraFields = {};
+            if (status === 'applied') {
+              extraFields.appliedDate = formattedEmailDate;
+              extraFields.followUp3Done = false;
+              extraFields.followUp7Done = false;
+            } else if (status === 'interviewing' || status === 'offer') {
+              extraFields.responseDate = formattedEmailDate;
+            }
             return [
-              ...prev,
+              ...cleanPrev,
               {
                 id: `app-indeed-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
                 company: companyName,
-                role: 'Synced via Gmail',
+                role: parsedRole,
                 priority,
                 status,
                 logoLetter: companyName.charAt(0).toUpperCase(),
                 customBg: 'linear-gradient(135deg, #0022ee, #0072ff)',
-                animateTrigger: true
+                animateTrigger: true,
+                emailSubject: subject,
+                emailSnippet: snippet,
+                emailDate: formattedEmailDate,
+                ...extraFields
               }
             ];
           }
@@ -168,23 +283,49 @@ export default function GmailSyncButton({ accessToken, userId, setApplications, 
       try {
         await new Promise(resolve => setTimeout(resolve, 1500));
         setApplications(prev => {
-          const applied = prev.filter(app => app.status === 'applied');
-          if (applied.length > 0) {
-            const targetApp = applied[Math.floor(Math.random() * applied.length)];
-            setTimeout(() => {
-              setApplications(current => current.map(app =>
-                app.id === targetApp.id ? { ...app, animateTrigger: false } : app
-              ));
-            }, 1000);
-            return prev.map(app =>
-              app.id === targetApp.id
-                ? { ...app, status: 'interviewing', priority: 'Technical Round', animateTrigger: true }
-                : app
-            );
-          }
-          return prev;
+          // Remove default/preloaded apps
+          const DEFAULT_IDS = ['app-google', 'app-meta', 'app-stripe', 'app-netflix', 'app-airbnb', 'app-vercel'];
+          const cleanPrev = prev.filter(app => !DEFAULT_IDS.includes(app.id));
+
+          // Mock two synchronized apps to test both cases: with parsed role and with empty/unspecified role.
+          const todayStr = new Date().toISOString().split('T')[0];
+          const mockOpenAI = {
+            id: `app-mock-openai-${Date.now()}`,
+            company: 'OpenAI',
+            role: 'Software Engineer Intern', // Found role!
+            priority: 'High Priority',
+            status: 'applied',
+            logoLetter: 'O',
+            customBg: 'linear-gradient(135deg, #a855f7, #6366f1)',
+            appliedDate: todayStr,
+            followUp3Done: false,
+            followUp7Done: false,
+            animateTrigger: true,
+            emailSubject: 'Confirming your application for Software Engineer Intern',
+            emailSnippet: 'Thank you for applying to the Software Engineer Intern role at OpenAI. We have received your application and will review it soon. Our team is impressed by your projects and will reach out if there is a match.',
+            emailDate: todayStr
+          };
+
+          const mockSpaceX = {
+            id: `app-mock-spacex-${Date.now()}`,
+            company: 'SpaceX',
+            role: '', // Empty role to test manual entering!
+            priority: 'Medium',
+            status: 'applied',
+            logoLetter: 'S',
+            customBg: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+            appliedDate: todayStr,
+            followUp3Done: false,
+            followUp7Done: false,
+            animateTrigger: true,
+            emailSubject: 'SpaceX Careers Application Update',
+            emailSnippet: 'We received your application for our technical internship positions. We are reviewing matching candidates at our Boca Chica and Hawthorne offices. You can monitor your status via your candidate profile.',
+            emailDate: todayStr
+          };
+
+          return [...cleanPrev, mockOpenAI, mockSpaceX];
         });
-        alert('✅ Gmail Sandbox Sync: Simulated Indeed notification processed!');
+        alert('✅ Gmail Sandbox Sync: Loaded OpenAI and SpaceX applications from Mock Inbox!');
       } finally {
         setSyncing(false);
       }

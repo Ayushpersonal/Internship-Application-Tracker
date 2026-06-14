@@ -9,6 +9,7 @@ import {
 import { Link } from 'react-router-dom';
 
 export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
   const [interviewStage, setInterviewStage] = useState('setup'); // 'setup', 'console', 'report'
   const [interviewSessionId, setInterviewSessionId] = useState(null);
   const [roleSelectValue, setRoleSelectValue] = useState('Software Engineer Intern');
@@ -243,7 +244,7 @@ export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
     setInterviewInitializing(true);
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/interview/start`, {
+      const response = await fetch(`${API_BASE_URL}/api/interview/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -271,7 +272,7 @@ export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
       startInterviewTimer();
     } catch (err) {
       addInterviewLog(`Initialization error: ${err.message}`, 'err');
-      alert('Could not start mock session. Ensure the backend FastAPI server is running on port 8000.');
+      alert(`Could not start mock session. Ensure the backend FastAPI server is running at ${API_BASE_URL}.`);
     } finally {
       setInterviewInitializing(false);
     }
@@ -302,7 +303,7 @@ export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
         payload.audio_data = recordedAudioBase64;
       }
 
-      const response = await fetch(`http://127.0.0.1:8000/api/interview/submit`, {
+      const response = await fetch(`${API_BASE_URL}/api/interview/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -340,7 +341,7 @@ export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
 
   const fetchAndRenderInterviewEvaluation = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/interview/evaluate`, {
+      const response = await fetch(`${API_BASE_URL}/api/interview/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: interviewSessionId })

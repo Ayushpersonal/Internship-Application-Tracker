@@ -11,10 +11,14 @@ export default function CalendarPage({
   handleToggleTask,
   quickTaskText,
   setQuickTaskText,
-  handleQuickAddTask
+  handleQuickAddTask,
+  isEmbedded = false
 }) {
   return (
-    <div className="calendar-page-container" style={{ padding: '40px 20px', maxWidth: '1200px', margin: '80px auto 40px auto' }}>
+    <div 
+      className={isEmbedded ? "" : "calendar-page-container"} 
+      style={isEmbedded ? { width: '100%', marginTop: '30px' } : { padding: '40px 20px', maxWidth: '1200px', margin: '80px auto 40px auto' }}
+    >
       <div className="dashboard-card card-double-width" id="calendar-section" style={{ width: '100%' }}>
         <div className="card-border-glow"></div>
         <div className="card-header">
@@ -40,7 +44,7 @@ export default function CalendarPage({
               </div>
               <div className="calendar-days">
                 {daysInJune.map((d, index) => {
-                  const isToday = !d.isPrev && d.day === 2;
+                  const isToday = !d.isPrev && d.day === new Date().getDate();
                   const isSelected = !d.isPrev && d.day === selectedDay;
                   const hasEvent = !d.isPrev && agendaDatabase[d.day];
                   
@@ -51,7 +55,7 @@ export default function CalendarPage({
 
                   let dotColorClass = '';
                   if (hasEvent) {
-                    dotColorClass = (d.day === 2 || d.day === 12 || d.day === 22) ? 'dot-red' : 'dot-yellow';
+                    dotColorClass = (d.day === new Date().getDate() || d.day === 12 || d.day === 22) ? 'dot-red' : 'dot-yellow';
                   }
 
                   return (
@@ -73,7 +77,7 @@ export default function CalendarPage({
             <div className="agenda-right-pane">
               <div className="agenda-header">
                 <span className="agenda-date" id="selected-agenda-date">
-                  {selectedDay === 2 ? 'Today - ' : ''}June {selectedDay}, 2026
+                  {selectedDay === new Date().getDate() ? 'Today - ' : ''}June {selectedDay}, 2026
                 </span>
                 <span className="agenda-count" id="active-tasks-count">
                   {remainingTasksCount} Remaining
@@ -95,7 +99,7 @@ export default function CalendarPage({
                         <input 
                           type="checkbox" 
                           checked={task.done} 
-                          onChange={() => handleToggleTask(index)}
+                          onChange={() => handleToggleTask(task)}
                         />
                         <span className="checkmark"></span>
                         <div className="task-info">
