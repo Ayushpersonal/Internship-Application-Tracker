@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Kanban, Mail, ShieldCheck, Cpu } from 'lucide-react';
 

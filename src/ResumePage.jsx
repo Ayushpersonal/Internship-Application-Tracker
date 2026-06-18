@@ -1,10 +1,14 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  FileCheck2, FileText, Briefcase, Loader2, Sparkles,
+  FileCheck2, FileText, Briefcase, Loader2, Sparkles, Cpu,
   UploadCloud, CheckCircle, XCircle, Zap, ArrowRight,
   AlertTriangle, ChevronRight, Target, TrendingUp
 } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { pipeline, env } from '@xenova/transformers';
+
+// Disable loading local models from the local dev server (prevents Vite serving index.html on missing model files)
+env.allowLocalModels = false;
 
 /* ─────────────────────────────────────────────────────────────────
    GEMINI SETUP — uses same key as OutreachPage
@@ -95,7 +99,7 @@ function analyzeLocally(resumeText, jdText) {
 /* ─────────────────────────────────────────────────────────────────
    SVG RADIAL PROGRESS RING
 ───────────────────────────────────────────────────────────────── */
-function RadialRing({ score, animating }) {
+function RadialRing({ score }) {
   const r = 54;
   const circ = 2 * Math.PI * r;
   const dashoffset = circ - (score / 100) * circ;
@@ -373,17 +377,10 @@ function BulletTailoringPanel({ bullets }) {
    MAIN PAGE COMPONENT
 ───────────────────────────────────────────────────────────────── */
 export default function ResumePage({
-  /* Legacy props from App.jsx — keep compatibility */
-  scoreAnimationVal: legacyScore,
-  dashoffsetVal,
-  getMatchStatusStyle,
-  getMatchStatusText,
   resumeText: propResumeText,
   setResumeText: propSetResumeText,
   jdText: propJdText,
   setJdText: propSetJdText,
-  handleAnalyzeResume: legacyAnalyze,
-  isAnalyzing: legacyAnalyzing,
 }) {
   /* ── Local state (self-contained so this works fully standalone) ── */
   const [resumeText, setResumeText] = useState(propResumeText || '');
@@ -394,16 +391,20 @@ export default function ResumePage({
   const [animScore, setAnimScore] = useState(0);
   const [results, setResults] = useState(null);
   const [analyzeError, setAnalyzeError] = useState('');
-  const [useAI, setUseAI] = useState(false);
-  const [analysisSource, setAnalysisSource] = useState(null); // 'gemini' | 'local'
+  const [analysisMode, setAnalysisMode] = useState('edge'); // 'local' | 'edge' | 'gemini'
+  const [loadingStatus, setLoadingStatus] = useState('');
+  const [analysisSource, setAnalysisSource] = useState(null); // 'gemini' | 'edge' | 'local'
 
   /* Sync to parent (App.jsx compatibility) */
-  useEffect(() => { propSetResumeText?.(resumeText); }, [resumeText]);
-  useEffect(() => { propSetJdText?.(jdText); }, [jdText]);
+  useEffect(() => { propSetResumeText?.(resumeText); }, [resumeText, propSetResumeText]);
+  useEffect(() => { propSetJdText?.(jdText); }, [jdText, propSetJdText]);
 
   /* Animate score ring when displayScore changes */
   useEffect(() => {
-    if (displayScore === 0) { setAnimScore(0); return; }
+    if (displayScore === 0) {
+      requestAnimationFrame(() => setAnimScore(0));
+      return;
+    }
     let current = 0;
     const target = displayScore;
     const step = () => {
@@ -434,9 +435,36 @@ export default function ResumePage({
 
     try {
       let data;
-      if (useAI && genAI) {
+      if (analysisMode === 'gemini') {
+        if (!genAI) {
+          throw new Error('Gemini API Key is not configured. Please set VITE_GEMINI_API_KEY in your environment.');
+        }
         data = await analyzeWithGemini(resumeText, jdText);
         setAnalysisSource('gemini');
+      } else if (analysisMode === 'edge') {
+        setLoadingStatus('Initializing browser sentence-transformer pipeline...');
+        const extractor = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        
+        setLoadingStatus('Encoding resume text...');
+        const resumeOutput = await extractor(resumeText, { pooling: 'mean', normalize: true });
+        
+        setLoadingStatus('Encoding job description...');
+        const jobOutput = await extractor(jdText, { pooling: 'mean', normalize: true });
+
+        const resumeVector = Array.from(resumeOutput.data);
+        const jobVector = Array.from(jobOutput.data);
+
+        setLoadingStatus('Calculating semantic vector compatibility...');
+        const dotProduct = resumeVector.reduce((sum, val, i) => sum + val * jobVector[i], 0);
+        const matchPercentage = Math.min(Math.max(Math.round(dotProduct * 100), 0), 100);
+
+        const localData = analyzeLocally(resumeText, jdText);
+        data = {
+          ...localData,
+          matchScore: matchPercentage,
+          summary: `Calculated semantic match of ${matchPercentage}% using local browser-based sentence embeddings (Xenova/all-MiniLM-L6-v2). ` + localData.summary
+        };
+        setAnalysisSource('edge');
       } else {
         await new Promise(r => setTimeout(r, 1200)); // simulate analysis
         data = analyzeLocally(resumeText, jdText);
@@ -446,16 +474,30 @@ export default function ResumePage({
       setResults(data);
     } catch (err) {
       console.error('Analysis error:', err);
-      // Fallback to local analysis on API failure
+      // Check for corrupt cache error
+      if (err.message && (err.message.includes('Unexpected token') || err.message.includes('not valid JSON') || err.message.includes('<!DOCTYPE html>'))) {
+        if ('caches' in window) {
+          try {
+            await caches.delete('transformers-cache');
+            console.log('Cleared corrupt transformers-cache successfully.');
+          } catch (cacheErr) {
+            console.warn('Failed to clear transformers-cache:', cacheErr);
+          }
+        }
+        setAnalyzeError('Detected a corrupt model files cache in your browser. We have automatically cleared the cache. Please click "Analyze Resume Compatibility" again to download the correct files.');
+      } else {
+        setAnalyzeError(err.message || 'Analysis failed — showing local lexical analysis instead.');
+      }
+      // Fallback to local analysis on failure
       const fallback = analyzeLocally(resumeText, jdText);
       setDisplayScore(fallback.matchScore);
       setResults(fallback);
       setAnalysisSource('local');
-      if (useAI) setAnalyzeError('Gemini failed — showing local analysis instead.');
     } finally {
       setAnalyzing(false);
+      setLoadingStatus('');
     }
-  }, [analyzing, resumeText, jdText, useAI]);
+  }, [analyzing, resumeText, jdText, analysisMode]);
 
   const getStatusBadge = (score) => {
     if (score >= 80) return { label: 'Excellent Fit', color: 'var(--neon-success)', bg: 'rgba(0,255,135,0.1)', border: 'rgba(0,255,135,0.3)' };
@@ -535,33 +577,49 @@ export default function ResumePage({
 
       {/* ── ROW 2: AI Toggle + Analyze Button (full-width bar) ── */}
       <div className="resume-analyze-bar">
-        <div className="ai-toggle-container resume-bar-toggle">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Sparkles size={13} style={{ color: useAI ? 'var(--neon-cyan)' : 'rgba(255,255,255,0.4)' }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: useAI ? '#fff' : 'rgba(255,255,255,0.55)' }}>
-              Deep AI Analysis (Gemini)
-            </span>
-          </div>
-          <label style={{ position: 'relative', display: 'inline-block', width: 40, height: 20 }}>
-            <input
-              type="checkbox"
-              checked={useAI}
-              onChange={(e) => setUseAI(e.target.checked)}
-              style={{ opacity: 0, width: 0, height: 0 }}
-            />
-            <span style={{
-              position: 'absolute', cursor: 'pointer', inset: 0,
-              backgroundColor: useAI ? 'var(--neon-cyan)' : 'rgba(255,255,255,0.1)',
-              transition: '.3s', borderRadius: 34,
-              boxShadow: useAI ? '0 0 10px rgba(0,240,255,0.5)' : 'none'
-            }}>
-              <span style={{
-                position: 'absolute', height: 14, width: 14,
-                left: useAI ? 22 : 4, bottom: 3,
-                backgroundColor: 'white', transition: '.3s', borderRadius: '50%'
-              }} />
-            </span>
-          </label>
+        <div className="analysis-mode-selector" style={{
+          display: 'flex',
+          background: 'rgba(255, 255, 255, 0.03)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: '30px',
+          padding: '4px',
+          gap: '4px',
+          alignItems: 'center'
+        }}>
+          {[
+            { mode: 'local', label: 'Local Lexical', icon: FileText, color: 'var(--neon-blue)' },
+            { mode: 'edge', label: 'Edge-AI (Local)', icon: Cpu, color: 'var(--neon-cyan)' },
+            { mode: 'gemini', label: 'Gemini Cloud', icon: Sparkles, color: 'var(--neon-purple)' }
+          ].map(opt => {
+            const Icon = opt.icon;
+            const active = analysisMode === opt.mode;
+            return (
+              <button
+                key={opt.mode}
+                onClick={() => setAnalysisMode(opt.mode)}
+                className={`mode-tab-btn ${active ? 'active' : ''}`}
+                style={{
+                  background: active ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  outline: 'none',
+                  borderRadius: '25px',
+                  padding: '6px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  color: active ? '#ffffff' : 'rgba(255, 255, 255, 0.45)',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  transition: 'all 0.3s ease',
+                  border: active ? `1px solid ${opt.color}44` : '1px solid transparent',
+                  boxShadow: active ? `0 0 10px ${opt.color}15` : 'none'
+                }}
+              >
+                <Icon size={12} style={{ color: active ? opt.color : 'rgba(255, 255, 255, 0.4)' }} />
+                <span>{opt.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {analyzeError && (
@@ -581,7 +639,9 @@ export default function ResumePage({
           {analyzing ? (
             <>
               <Loader2 size={16} className="animate-spin" />
-              {useAI ? 'Gemini Analyzing…' : 'Analyzing Resume…'}
+              {analysisMode === 'gemini' ? 'Gemini Analyzing…' : 
+               analysisMode === 'edge' ? 'Running Browser Inference…' : 
+               'Analyzing Resume…'}
             </>
           ) : (
             <>
@@ -605,14 +665,35 @@ export default function ResumePage({
               <p className="card-subtitle">ATS keyword match analysis</p>
             </div>
             {analysisSource && (
-              <span className={`analysis-source-badge ${analysisSource}`}>
-                {analysisSource === 'gemini' ? '✨ Gemini AI' : '⚡ Local'}
+              <span className={`analysis-source-badge ${analysisSource}`} style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '20px',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                border: '1px solid',
+                background: 
+                  analysisSource === 'gemini' ? 'rgba(157, 78, 221, 0.12)' :
+                  analysisSource === 'edge' ? 'rgba(0, 240, 255, 0.12)' :
+                  'rgba(0, 114, 255, 0.12)',
+                color:
+                  analysisSource === 'gemini' ? 'var(--neon-purple)' :
+                  analysisSource === 'edge' ? 'var(--neon-cyan)' :
+                  'var(--neon-blue)',
+                borderColor:
+                  analysisSource === 'gemini' ? 'rgba(157, 78, 221, 0.25)' :
+                  analysisSource === 'edge' ? 'rgba(0, 240, 255, 0.25)' :
+                  'rgba(0, 114, 255, 0.25)'
+              }}>
+                {analysisSource === 'gemini' ? '✨ Gemini AI' : 
+                 analysisSource === 'edge' ? '⚙️ Edge-AI' : 
+                 '⚡ Local'}
               </span>
             )}
           </div>
 
           <div className="resume-score-body">
-            <RadialRing score={animScore} animating={analyzing} />
+            <RadialRing score={animScore} />
 
             {badge && (
               <div
@@ -637,14 +718,24 @@ export default function ResumePage({
 
             {analyzing && (
               <div className="resume-analyzing-overlay">
-                <div className="analyzing-steps">
-                  {['Parsing resume content…', 'Extracting JD keywords…', 'Computing ATS score…', 'Generating upgrades…'].map((step, i) => (
-                    <div key={i} className="analyzing-step" style={{ animationDelay: `${i * 0.4}s` }}>
-                      <div className="step-dot" />
-                      <span>{step}</span>
-                    </div>
-                  ))}
-                </div>
+                {analysisMode === 'edge' && loadingStatus ? (
+                  <div style={{ textAlign: 'center', padding: '24px' }}>
+                    <Cpu size={32} className="animate-spin" style={{ color: 'var(--neon-cyan)', marginBottom: '16px', animation: 'spin 2s linear infinite' }} />
+                    <p style={{ fontSize: '13.5px', color: '#fff', fontWeight: 600, margin: 0 }}>{loadingStatus}</p>
+                    <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', marginTop: '8px', margin: '8px 0 0' }}>
+                      (Model runs completely in client memory sandbox)
+                    </p>
+                  </div>
+                ) : (
+                  <div className="analyzing-steps">
+                    {['Parsing resume content…', 'Extracting JD keywords…', 'Computing ATS score…', 'Generating upgrades…'].map((step, i) => (
+                      <div key={i} className="analyzing-step" style={{ animationDelay: `${i * 0.4}s` }}>
+                        <div className="step-dot" />
+                        <span>{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

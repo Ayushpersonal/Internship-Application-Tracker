@@ -1,14 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Sparkles, 
-  Clock, 
-  Loader2, 
-  ArrowLeft,
-  Info
+  ArrowLeft
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
+export default function AIInterviewPage() {
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
   const [interviewStage, setInterviewStage] = useState('setup'); // 'setup', 'console', 'report'
   const [interviewSessionId, setInterviewSessionId] = useState(null);
@@ -92,7 +89,9 @@ export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
       if (recognitionRef.current && isInterviewListening) {
         try {
           recognitionRef.current.start();
-        } catch (e) {}
+        } catch {
+          // ignore
+        }
       }
     };
 
@@ -123,15 +122,12 @@ export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
     };
 
     recognition.onresult = (event) => {
-      let interimTranscript = '';
       let finalTranscript = '';
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           finalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
         }
       }
 
@@ -159,14 +155,17 @@ export default function AIInterviewPage({ currentUser, isFirebaseMock }) {
   };
 
   useEffect(() => {
-    initSpeechRecognition();
+    const timer = setTimeout(() => {
+      initSpeechRecognition();
+    }, 0);
     return () => {
+      clearTimeout(timer);
       if (recognitionRef.current) {
         recognitionRef.current.abort();
       }
       clearInterval(interviewTimerIntervalRef.current);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMicClick = () => {
     if (!recognitionRef.current) {

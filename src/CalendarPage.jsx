@@ -1,4 +1,3 @@
-import React from 'react';
 import { Calendar as CalendarIcon, Clock, Plus, Info } from 'lucide-react';
 
 export default function CalendarPage({

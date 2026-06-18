@@ -12,18 +12,24 @@
 |---|---|---|
 | `src/main.jsx` | App entry point. Wraps everything in `<BrowserRouter>` | ⚠️ YES |
 | `src/firebase.js` | Firebase init, auth, Firestore db export | ⚠️ YES |
-| `src/App.jsx` | Root component: auth, routing, ALL shared state | 🔴 CRITICAL |
-| `src/index.css` | ALL styling (66KB). Design system + animations | 🔴 CRITICAL |
+| `src/App.jsx` | Root component: auth, routing, real-time subcollection sync, shared state | 🔴 CRITICAL |
+| `src/index.css` | ALL styling. Design system + animations | 🔴 CRITICAL |
+| `src/AntiGravityKanban.css` | Anti-gravity 3D transitions and card-wrapper float animations | ⚠️ YES |
 | `src/LandingPage.jsx` | Public landing page at route `/landing` | ✅ Safe to extend |
 | `src/LoginPage.jsx` | Login/Register page at route `/login` | ✅ Safe to extend |
 | `src/TrackerPage.jsx` | Manage Internship (Kanban board) at route `/` | ✅ Safe to extend |
 | `src/OutreachPage.jsx` | AI Outreach email generator at route `/outreach` | ✅ Safe to extend |
-| `src/ResumePage.jsx` | ATS Resume Analyzer at route `/resume` | ✅ Safe to extend |
-| `src/CalendarPage.jsx` | Interview Schedule calendar at route `/calendar` | ✅ Safe to extend |
+| `src/ResumePage.jsx` | ATS Resume Analyzer (Local Lexical, Edge-AI, Gemini Cloud) at `/resume` | ✅ Safe to extend |
+| `src/EdgeAnalyzer.jsx` | Standalone client-side semantic similarity analyzer component | ✅ Safe to extend |
+| `src/CalendarPage.jsx` | Interview Schedule calendar component | ✅ Safe to extend |
 | `src/AIInterviewPage.jsx` | AI Mock Interview at route `/interview` | ✅ Safe to extend |
 | `src/GmailSyncButton.jsx` | Gmail OAuth + inbox parser component | ⚠️ YES |
 | `src/KanbanSkeletonCard.jsx` | Loading placeholder card for Kanban | ✅ Safe |
 | `firestore.rules` | Firestore security rules | ⚠️ YES |
+| `backend/main.py` | FastAPI entry point, routes mount, and static build files server | ⚠️ YES |
+| `backend/routes/interview.py` | FastAPI interview sessions controller router | ⚠️ YES |
+| `backend/services/gemini_service.py` | API client integrations and mock seed models | ⚠️ YES |
+| `backend/services/evaluation_service.py` | Mock interview performance compiler service | ⚠️ YES |
 | `.env` | All environment variables | 🔴 CRITICAL |
 
 ---
@@ -36,7 +42,6 @@
 /           → TrackerPage    (protected, requires login)
 /outreach   → OutreachPage   (protected)
 /resume     → ResumePage     (protected)
-/calendar   → CalendarPage   (protected)
 /interview  → AIInterviewPage (protected)
 ```
 
@@ -80,10 +85,10 @@ handleLaunchSandbox()      // Sets isMock=true user for demo mode
 
 ## ☁️ Firestore Cloud Sync — DO NOT MODIFY THIS LOGIC
 
-### Data Path:
+### Data Paths:
 ```
-Firestore: users/{uid}/tracker/applications
-Field: { apps: [...], updatedAt: Timestamp }
+Firestore User Apps Collection: users/{uid}/tracker/applications (Field: { apps: [...] })
+Firestore Decentralized Sync Subcollection: users/{uid}/applications (Field: { company, title, stage })
 localStorage key: applications_{uid}
 ```
 
@@ -95,15 +100,32 @@ localStorage key: applications_{uid}
 - localStorage is always updated **immediately** as offline cache
 - `cloudSyncStatus` state = `'idle' | 'saving' | 'saved' | 'error'` — shown in header badge
 
-### What happens on first login (new user):
-1. `onSnapshot` fires → document doesn't exist
-2. Seeds Firestore with whatever is in `localStorage` or `DEFAULT_APPS`
-3. Sets `firestoreWritePending = true` to suppress the echo
+---
 
-### What happens on logout:
-- Applications state is **NOT touched** — data stays safe in localStorage
-- Firestore listener unsubscribes automatically
-- On next login, Firestore snapshot fires and repopulates state
+## 📧 Gmail Ingestion (Decentralized Apps Script Sync)
+
+**Modal File**: `src/TrackerPage.jsx` connect Gmail modal
+**Sync Code**: Google Apps Script script triggered hourly
+
+* Bypasses intermediate servers. User copies and hosts the Google Apps Script in their personal accounts.
+* The script makes a direct POST request to the Firebase Firestore REST API:
+  `https://firestore.googleapis.com/v1/projects/{projectId}/databases/(default)/documents/users/{uid}/applications`
+* Real-time listeners on the subcollection `users/{uid}/applications` in `App.jsx` capture the changes and update the Kanban board immediately.
+
+---
+
+## 🤖 Edge Artificial Intelligence Model Ingestion
+
+**Files**: `src/ResumePage.jsx`, `src/EdgeAnalyzer.jsx`
+
+* Uses **Transformers.js** to load `Xenova/all-MiniLM-L6-v2` (sentence-transformers) inside the browser memory sandbox.
+* Performs mean pooling and normalization to output 384-dimensional dense vectors:
+  $$\mathbf{v}_R, \mathbf{v}_J \in \mathbb{R}^{384}$$
+* Computes cosine vector similarity locally on client CPU/GPU:
+  $$\text{Similarity}(R, J) = \sum_{i=1}^{384} v_{R,i} \cdot v_{J,i}$$
+* **Self-Healing Model Cache Protocol**:
+  * Employs `env.allowLocalModels = false` to prevent local file requests being routed as SPA HTML fallbacks.
+  * Checks for corrupt browser cached HTML files. If a `SyntaxError` occurs during pipeline initialization, the code automatically deletes the cached model entry (`caches.delete('transformers-cache')`) and prompts the user to re-run the analysis to download a clean copy from the Hugging Face Hub CDN.
 
 ---
 
@@ -121,203 +143,13 @@ Every application card must have these exact fields:
   logoClass: string,    // optional: 'logo-google' etc (CSS class)
   logoLetter: string,   // single letter for avatar
   customBg: string,     // optional: gradient string
-  animateTrigger: bool  // optional: triggers glow animation
+  appliedDate: string,  // optional: date applied YYYY-MM-DD
+  responseDate: string, // optional: date responded YYYY-MM-DD
+  followUp3Done: bool,  // optional: tracker for calendar checklist
+  followUp7Done: bool,  // optional: tracker for calendar checklist
+  animateTrigger: bool  // optional: triggers zero-gravity glow animation
 }
 ```
-
-### Priority Values (tied to CSS tag classes via `getTagClass()`):
-```
-'High Priority'    → tag-high    (neon cyan)
-'Medium'           → tag-medium  (grey)
-'Technical Round'  → tag-tech    (purple)
-'Behavioral Round' → tag-hr      (yellow)
-'Active Offer'     → tag-success (green)
-```
-
-### Kanban Actions (all live in `App.jsx`, passed as props to `TrackerPage`):
-```js
-handleMoveItem(itemId, targetStatus)  // moves card between columns
-handleAddApplication(e)               // adds card from modal form
-handleDragStart(e, cardId)            // HTML5 drag
-handleDragOver(e)                     // HTML5 drag
-handleDrop(e, columnStatus)           // HTML5 drop
-getTagClass(priority)                 // maps priority → CSS class
-```
-
----
-
-## 📧 Gmail Sync — How It Works
-
-**File**: `src/GmailSyncButton.jsx`
-
-### Props (never rename these):
-```js
-accessToken     // current gmailToken from App.jsx
-userId          // currentUser.uid
-setApplications // to update Kanban after sync
-setGmailToken   // to update token if refreshed
-currentUser     // to detect mock mode
-syncing         // bool loading state
-setSyncing      // setter
-```
-
-### Sync flow:
-1. If `currentUser.isMock` → run sandbox simulation (fake card move)
-2. If real token exists → call Gmail API directly
-3. If token missing/expired → use **Google Identity Services** to request fresh `gmail.readonly` token
-4. Searches 4 Gmail queries: Indeed, LinkedIn, Glassdoor, generic subject
-5. Parses with 5 regex patterns to extract company names
-6. Creates/updates cards in `applications` state
-
-### Requires in `.env`:
-```
-VITE_GOOGLE_CLIENT_ID=267278392165-XXXX.apps.googleusercontent.com
-```
-(Get from Firebase Console → Auth → Google → Web client ID)
-
----
-
-## 🎨 Design System — CSS in `index.css`
-
-### CSS Variables (NEVER rename these — used everywhere):
-```css
---neon-cyan: #00f0ff
---neon-purple: #9d4edd
---neon-success: #00ff87
---neon-gold: #ffaa00
---bg-deep: #050510
---bg-card: rgba(255,255,255,0.03)
---border-glow: rgba(0,240,255,0.15)
-```
-
-### Key CSS Classes (used across all pages — do NOT rename):
-```
-.btn .btn-primary .btn-secondary .btn-lg .btn-glow .btn-header .btn-action
-.dashboard-card .card-border-glow .card-header .card-header-left .card-body
-.bento-card .col-5 .col-7
-.kanban-column .kanban-card .kanban-card-header
-.tag-high .tag-medium .tag-tech .tag-hr .tag-success
-.hero-section .hero-content .hero-heading .gradient-text
-.mini-kanban-board .mini-kanban-column .mini-kanban-card
-.mini-outreach .mini-outreach-tones .mini-tone-btn
-.nav-link .nav-menu .main-header .header-container .header-actions
-.progress-bar-container .progress-bar-fill
-.modal-overlay .modal-box
-.user-display-email
-.nebula .nebula-cyan .nebula-purple .nebula-blue
-#space-starfield (canvas element ID)
-```
-
-### Background Animation:
-- `<canvas id="space-starfield">` renders an animated starfield with mouse repel
-- `<div class="nebula nebula-*">` renders glowing background blobs
-- These are in `App.jsx` `return()` and must always be the FIRST children of the root div
-
----
-
-## 🧩 Component Props — What Each Page Receives
-
-### TrackerPage receives from App.jsx:
-```js
-applications, appliedApps, interviewingApps, offerApps,
-totalAppsCount, successRate, progressPercent,
-gmailToken, currentUser, gmailSyncing,
-setApplications, setGmailToken, setGmailSyncing,
-setShowAddModal, showAddModal,
-newCompany, setNewCompany,
-newRole, setNewRole,
-newPriority, setNewPriority,
-newStatus, setNewStatus,
-handleAddApplication, handleDragOver, handleDrop, handleDragStart,
-handleMoveItem, getTagClass
-```
-
-### LandingPage receives from App.jsx:
-```js
-currentUser, handleLaunchSandbox,
-envMode, setEnvMode, terminalLogs
-```
-> ⚠️ `MiniKanbanMockup` and `MiniOutreachMockup` are defined **inside LandingPage.jsx** — NOT passed as props
-
-### LoginPage receives from App.jsx:
-```js
-currentUser, handleAuthSubmit, handleGoogleSignIn,
-authEmail, setAuthEmail,
-authPassword, setAuthPassword,
-authError, setAuthError,
-authLoading
-```
-
----
-
-## 🌐 Mini Mockup Components (in `LandingPage.jsx`)
-
-`MiniKanbanMockup` — interactive preview of Kanban board
-`MiniOutreachMockup` — interactive tone-switcher email preview
-
-**These are defined at the top of `LandingPage.jsx`** (not in App.jsx, not passed as props).
-- They use local `useState` only
-- They have their own CSS classes: `.mini-kanban-board`, `.mini-outreach`, etc.
-- Click handlers have `e.stopPropagation()` to prevent card click from bubbling
-
----
-
-## 🤖 AI Interview Page (`AIInterviewPage.jsx`)
-
-- Route: `/interview`
-- Large file (~37KB), fully self-contained
-- Has its own state for session management, question generation, scoring
-- **Do NOT move any of its state to App.jsx**
-- Has a "Back to Website" link — must navigate to `/landing` (not `/`)
-
----
-
-## ⚙️ Environment Variables (`.env`)
-
-```
-VITE_FIREBASE_API_KEY
-VITE_FIREBASE_AUTH_DOMAIN
-VITE_FIREBASE_PROJECT_ID
-VITE_FIREBASE_STORAGE_BUCKET
-VITE_FIREBASE_MESSAGING_SENDER_ID
-VITE_FIREBASE_APP_ID
-VITE_FIREBASE_MEASUREMENT_ID
-VITE_GOOGLE_CLIENT_ID     ← needed for Gmail sync re-auth
-```
-
-> All variables must start with `VITE_` to be accessible in browser code.
-> The app detects missing Firebase config and **auto-falls back to Sandbox Mode** — this is intentional.
-
----
-
-## 🔁 Sandbox / Mock Mode
-
-When Firebase is not configured OR user clicks "Launch Sandbox":
-- `currentUser = { email: 'sandbox-google-user@gmail.com', uid: 'sandbox-google-user-123', isMock: true }`
-- `gmailToken = 'sandbox-mock-token'`
-- Gmail sync simulates a card move instead of hitting real API
-- Firestore is **completely skipped** — localStorage only
-- Header shows `[Sandbox]` badge in gold color
-- **This mode must always work** even with no .env file
-
----
-
-## 🧭 Navigation Logic
-
-### `showDashboard` flag controls what renders at `/`:
-```
-showDashboard = true  → TrackerPage
-showDashboard = false → LandingPage
-```
-
-### "Back to Website" button:
-```js
-onClick={() => setShowDashboard(false)}
-// + Link to="/"
-```
-Sets `showDashboard=false` → renders LandingPage at same `/` URL.
-
-### After logout: always `navigate('/')` which shows LandingPage (showDashboard=false).
 
 ---
 
@@ -333,6 +165,8 @@ Sets `showDashboard=false` → renders LandingPage at same `/` URL.
 8. ❌ **Never delete `terminalLogs` state or the terminal simulator `useEffect`** — LandingPage uses it
 9. ❌ **Never remove the `<canvas id="space-starfield">` element** — background animation breaks
 10. ❌ **Never delete the `?redirect=` query param logic in LoginPage** — smart redirect after login breaks
+11. ❌ **Never remove `env.allowLocalModels = false;`** in `ResumePage.jsx` or `EdgeAnalyzer.jsx` — causes Vite dev server routing mismatch loops.
+12. ❌ **Never remove the self-healing catch blocks** that perform `caches.delete('transformers-cache')` on `SyntaxError` — essential for automatic recovery from corrupt local model storage.
 
 ---
 
@@ -349,42 +183,54 @@ When adding a new feature or UI, verify:
 - [ ] `isFirebaseMock || !auth` check still wraps all real Firebase calls
 - [ ] `currentUser?.isMock` check still present in Firestore effects
 - [ ] New pages are imported in `App.jsx` and added to `<Routes>`
-- [ ] New pages receive props from `App.jsx`, not managing their own auth state
+- [ ] Run `npm run lint` — must be 100% clean of errors and warnings
 - [ ] Run `npm run build` — zero errors before finishing
 
 ---
 
 ## 📊 Feature Inventory (Current v2.0)
 
-| # | Feature | Page | Status |
+| # | Feature | Page / Component | Status |
 |---|---|---|---|
 | 1 | Kanban Drag & Drop Board | TrackerPage | ✅ Live |
 | 2 | Add Application Modal | TrackerPage | ✅ Live |
 | 3 | Progress Bar & Success Rate | TrackerPage | ✅ Live |
-| 4 | Gmail Sync (Indeed/LinkedIn/Glassdoor) | TrackerPage | ✅ Live |
-| 5 | Firestore Cloud Sync (real-time) | App.jsx | ✅ Live |
-| 6 | localStorage Cache (offline fallback) | App.jsx | ✅ Live |
-| 7 | Cloud Sync Badge in Header | App.jsx header | ✅ Live |
-| 8 | AI Cold Email Outreach Generator | OutreachPage | ✅ Live |
-| 9 | Typewriter Email Animation | OutreachPage | ✅ Live |
-| 10 | 3 Tone Templates (professional/warm/concise) | OutreachPage | ✅ Live |
-| 11 | ATS Resume Keyword Matcher | ResumePage | ✅ Live |
-| 12 | Score Animation (circular progress ring) | ResumePage | ✅ Live |
-| 13 | Interview Calendar with Tasks | CalendarPage | ✅ Live |
-| 14 | Quick Task Add (Enter key) | CalendarPage | ✅ Live |
-| 15 | AI Mock Interview (full session) | AIInterviewPage | ✅ Live |
-| 16 | Google Sign-In OAuth | LoginPage | ✅ Live |
-| 17 | Email/Password Auth | LoginPage | ✅ Live |
-| 18 | Sandbox Mock Mode (no Firebase) | App.jsx | ✅ Live |
-| 19 | Smart Redirect After Login | LoginPage | ✅ Live |
-| 20 | Landing Page Bento Grid | LandingPage | ✅ Live |
-| 21 | Interactive Mini Kanban Demo | LandingPage | ✅ Live |
-| 22 | Interactive Mini Outreach Demo | LandingPage | ✅ Live |
-| 23 | Terminal Simulator on Landing | LandingPage | ✅ Live |
-| 24 | Starfield Background Animation | App.jsx | ✅ Live |
-| 25 | Mouse-Repel Star Particles | App.jsx | ✅ Live |
-| 26 | Nebula Background Blobs | App.jsx | ✅ Live |
-| 27 | Per-Account Data Isolation | App.jsx | ✅ Live |
-| 28 | Session Restore on Refresh | App.jsx | ✅ Live |
-| 29 | "Back to Website" Button | Header | ✅ Live |
-| 30 | Logout Preserves Cloud Data | App.jsx | ✅ Live |
+| 4 | Gmail Sync (OAuth Web Integration) | TrackerPage / GmailSyncButton | ✅ Live |
+| 5 | Google Apps Script Decentralized Setup Modal | TrackerPage | ✅ Live |
+| 6 | Firestore Cloud Sync (real-time tracker collection) | App.jsx | ✅ Live |
+| 7 | Firestore Subcollection Listener (decentralized ingestion) | App.jsx | ✅ Live |
+| 8 | localStorage Cache (offline fallback) | App.jsx | ✅ Live |
+| 9 | Cloud Sync Status Badge | App.jsx header | ✅ Live |
+| 10 | AI Cold Email Outreach Generator | OutreachPage | ✅ Live |
+| 11 | Typewriter Email Animation | OutreachPage | ✅ Live |
+| 12 | 3 Tone Templates (professional/warm/concise) | OutreachPage | ✅ Live |
+| 13 | Recruiter Sourcing Brief & Search Intel Sourcing | OutreachPage | ✅ Live |
+| 14 | ATS Resume Keyword Matcher (Regex comparison) | ResumePage | ✅ Live |
+| 15 | Edge-AI Semantic Matcher (all-MiniLM-L6-v2 local model) | ResumePage / EdgeAnalyzer | ✅ Live |
+| 16 | Self-Healing Browser Cache Handler (`transformers-cache`) | ResumePage / EdgeAnalyzer | ✅ Live |
+| 17 | Score Animation (circular progress ring) | ResumePage | ✅ Live |
+| 18 | Interactive Interview Checklist & Task Calendar | CalendarPage / TrackerPage | ✅ Live |
+| 19 | Quick Task Add (Enter key) | CalendarPage / TrackerPage | ✅ Live |
+| 20 | AI Mock Interview Simulator (FastAPI + voice synthesis) | AIInterviewPage | ✅ Live |
+| 21 | Web Speech Recognition & Audio Webm Recording | AIInterviewPage | ✅ Live |
+| 22 | Google Sign-In OAuth | LoginPage | ✅ Live |
+| 23 | Email/Password Auth | LoginPage | ✅ Live |
+| 24 | Sandbox Mock Mode (no Firebase) | App.jsx | ✅ Live |
+| 25 | Smart Redirect After Login | LoginPage | ✅ Live |
+| 26 | Landing Page Bento Grid | LandingPage | ✅ Live |
+| 27 | Interactive Mini Kanban Demo | LandingPage | ✅ Live |
+| 28 | Interactive Mini Outreach Demo | LandingPage | ✅ Live |
+| 29 | Terminal Simulator on Landing | LandingPage | ✅ Live |
+| 30 | Starfield Background Animation | App.jsx | ✅ Live |
+| 31 | Mouse-Repel Star Particles | App.jsx | ✅ Live |
+| 32 | Nebula Background Blobs | App.jsx | ✅ Live |
+| 33 | Per-Account Data Isolation | App.jsx | ✅ Live |
+| 34 | Session Restore on Refresh | App.jsx | ✅ Live |
+| 35 | "Back to Website" Button | Header | ✅ Live |
+| 36 | Logout Preserves Cloud Data | App.jsx | ✅ Live |
+| 37 | Hardware-Accelerated Zero-G Transitions (3D matrices) | AntiGravityKanban.css | ✅ Live |
+| 38 | Self-Healing Model Cache Purge | ResumePage / EdgeAnalyzer | ✅ Live |
+| 39 | Dynamic UI Mode Selector Segment Bar | ResumePage | ✅ Live |
+| 40 | FastAPI Backed Interview Evaluator (Full report critique) | AIInterviewPage | ✅ Live |
+| 41 | Web Speech Recognition Filler Words Ratio calculation | backend / gemini_service | ✅ Live |
+| 42 | Pre-filled Firebase UID and Project ID in code blocks | TrackerPage | ✅ Live |

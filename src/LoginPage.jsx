@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 export default function LoginPage({
   currentUser,

@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Mail, Sparkles, Loader2, Check, Copy, ChevronRight, Users, GitBranch, Zap } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Mail, Sparkles, Loader2, Check, Copy, Users, GitBranch, Zap } from 'lucide-react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
@@ -12,7 +12,6 @@ const genAI = geminiApiKey && geminiApiKey !== 'YOUR_GEMINI_API_KEY' ? new Googl
 async function generateColdEmailWithGemini(name, company, role, tone) {
   if (!genAI) throw new Error("Gemini API key not configured.");
   
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   const n = name || 'Hiring Team';
   const c = company || 'a tech company';
   const r = role || 'Software Engineer Intern';
@@ -135,16 +134,12 @@ function TargetSelectorCard({ app, selected, onClick }) {
    MAIN COMPONENT
 ───────────────────────────────────────────────────────────────── */
 export default function OutreachPage({
-  /* Legacy props from App.jsx — still supported */
   recruiterName,    setRecruiterName,
   recruiterCompany, setRecruiterCompany,
   outreachRole,     setOutreachRole,
   outreachTone,     setOutreachTone,
-  isTyping,         handleGenerateOutreach: legacyGenerate,
-  emailSubject,     copiedState,
-  handleCopyOutreach: legacyCopy,
+  emailSubject,
   emailBodyDisplay,
-  /* New props */
   applications,
 }) {
   /* ── Local state ── */

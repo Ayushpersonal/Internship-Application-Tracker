@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
-import { Kanban, Plus, ArrowRight, ArrowLeft } from 'lucide-react';
+import { useState } from 'react';
+import { Kanban, Plus, ArrowRight, ArrowLeft, ShieldCheck } from 'lucide-react';
 import GmailSyncButton from './GmailSyncButton';
 import KanbanSkeletonCard from './KanbanSkeletonCard';
 import CalendarPage from './CalendarPage';
 
 export default function TrackerPage({
-  applications,
   appliedApps,
   interviewingApps,
   offerApps,
@@ -47,6 +46,60 @@ export default function TrackerPage({
 }) {
   const [selectedApp, setSelectedApp] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [showGmailSetupModal, setShowGmailSetupModal] = useState(false);
+  const [copiedScript, setCopiedScript] = useState(false);
+
+  const appsScriptCode = `function checkIndeedEmails() {
+  const FIREBASE_FIRESTORE_URL = "https://firestore.googleapis.com/v1/projects/${import.meta.env.VITE_FIREBASE_PROJECT_ID || 'YOUR_PROJECT_ID'}/databases/(default)/documents/users/${currentUser?.uid || 'USER_ID'}/applications";
+  
+  const threads = GmailApp.search("from:no-reply@indeed.com is:unread");
+  
+  for (let i = 0; i < threads.length; i++) {
+    const messages = threads[i].getMessages();
+    for (let j = 0; j < messages.length; j++) {
+      const message = messages[j];
+      const body = message.getPlainBody();
+      const subject = message.getSubject();
+      
+      const companyMatch = body.match(/Company:\\\\s*([^\\\\n]+)/) || subject.match(/at\\\\s*([^\\\\n,-]+)/);
+      const titleMatch = body.match(/Position:\\\\s*([^\\\\n]+)/) || subject.match(/for\\\\s*([^\\\\n,-]+)/);
+      
+      let status = "Applied";
+      if (body.toLowerCase().includes("interview") || subject.toLowerCase().includes("interview")) {
+        status = "Interviewing";
+      } else if (body.toLowerCase().includes("offer")) {
+        status = "Offer Received";
+      }
+      
+      if (companyMatch && titleMatch) {
+        const companyName = companyMatch[1].trim();
+        const jobTitle = titleMatch[1].trim();
+        
+        const payload = {
+          fields: {
+            company: { stringValue: companyName },
+            title: { stringValue: jobTitle },
+            stage: { stringValue: status },
+            updatedAt: { timestampValue: new Date().toISOString() }
+          }
+        };
+        
+        const options = {
+          method: "post",
+          contentType: "application/json",
+          payload: JSON.stringify(payload),
+          headers: {
+            Authorization: "Bearer " + ScriptApp.getOAuthToken()
+          },
+          muteHttpExceptions: true
+        };
+        
+        UrlFetchApp.fetch(FIREBASE_FIRESTORE_URL, options);
+        message.markRead();
+      }
+    }
+  }
+}`;
   const [editCompany, setEditCompany] = useState('');
   const [editRole, setEditRole] = useState('');
   const [editPriority, setEditPriority] = useState('High Priority');
@@ -137,6 +190,20 @@ export default function TrackerPage({
               setSyncing={setGmailSyncing}
             />
             <button 
+              className="btn btn-action"
+              style={{
+                background: 'rgba(139, 92, 246, 0.15)',
+                border: '1px solid rgba(139, 92, 246, 0.3)',
+                color: '#c084fc',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              onClick={() => setShowGmailSetupModal(true)}
+            >
+              <ShieldCheck size={14} /> Connect Gmail
+            </button>
+            <button 
               className="btn btn-action" 
               id="btn-add-application" 
               onClick={() => setShowAddModal(true)}
@@ -157,7 +224,7 @@ export default function TrackerPage({
             </div>
           </div>
 
-          <div className="kanban-board">
+          <div className="kanban-board kanban-board-grid">
             {/* Column: Applied */}
             <div 
               className="kanban-column" 
@@ -171,7 +238,7 @@ export default function TrackerPage({
               <div className="kanban-cards-container">
                 {appliedApps.map(app => (
                   <div 
-                    className={`kanban-item ${app.animateTrigger ? "anti-gravity-floating" : ""}`} 
+                    className={`kanban-item kanban-card-wrapper ${app.animateTrigger ? "card-floating-upward" : ""}`} 
                     key={app.id} 
                     id={app.id}
                     draggable
@@ -230,7 +297,7 @@ export default function TrackerPage({
               <div className="kanban-cards-container">
                 {interviewingApps.map(app => (
                   <div 
-                    className={`kanban-item ${app.animateTrigger ? "anti-gravity-floating" : ""}`} 
+                    className={`kanban-item kanban-card-wrapper ${app.animateTrigger ? "card-floating-upward" : ""}`} 
                     key={app.id}
                     id={app.id}
                     draggable
@@ -301,7 +368,7 @@ export default function TrackerPage({
               <div className="kanban-cards-container">
                 {offerApps.map(app => (
                   <div 
-                    className={`kanban-item offer-border-pulse ${app.animateTrigger ? "anti-gravity-floating" : ""}`} 
+                    className={`kanban-item offer-border-pulse kanban-card-wrapper ${app.animateTrigger ? "card-floating-upward" : ""}`} 
                     key={app.id}
                     id={app.id}
                     draggable
@@ -349,6 +416,82 @@ export default function TrackerPage({
                 ))}
                 {gmailSyncing && <KanbanSkeletonCard />}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Connect Gmail (Decentralized Apps Script Setup) Modal */}
+        <div className={`application-modal-overlay ${showGmailSetupModal ? 'active' : ''}`}>
+          <div className="application-modal" style={{ maxWidth: '650px', width: '95%', maxHeight: '85vh', overflowY: 'auto' }}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c084fc' }}>
+                <ShieldCheck size={20} />
+                Decentralized Gmail Sync Setup
+              </h3>
+              <button className="btn-close" onClick={() => setShowGmailSetupModal(false)}>&times;</button>
+            </div>
+            <div className="modal-body" style={{ color: '#cbd5e1', fontSize: '13.5px', lineHeight: '1.6' }}>
+              <p style={{ marginBottom: '16px' }}>
+                Set up a secure, <strong>$0 cost Google Apps Script</strong> on your own Google account. It scans your personal inbox directly and streams new application updates into Firestore via the REST API with 100% privacy.
+              </p>
+              
+              <div style={{ background: 'rgba(255, 255, 255, 0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', marginBottom: '20px' }}>
+                <h4 style={{ color: '#fff', fontSize: '14px', marginBottom: '8px' }}>Step-by-Step Instructions:</h4>
+                <ol style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <li>Go to <strong><a href="https://script.google.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--neon-cyan)', textDecoration: 'none' }}>Google Apps Script (script.google.com)</a></strong> and log in.</li>
+                  <li>Click <strong>New Project</strong> on the top left.</li>
+                  <li>Replace the default placeholder code in the editor with the pre-configured script below.</li>
+                  <li>Click the <strong>Save icon (Ctrl+S)</strong> and run it once by clicking <strong>Run</strong> to authorize Gmail scopes.</li>
+                  <li>Set up an automated timer: Click <strong>Triggers</strong> (alarm clock icon on the left sidebar), click <strong>Add Trigger</strong>, select <code>checkIndeedEmails</code>, set event source to <strong>Time-driven</strong>, and select an <strong>Hourly timer</strong>.</li>
+                </ol>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '1px' }}>Pre-configured Google Apps Script Code</span>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(appsScriptCode);
+                    setCopiedScript(true);
+                    setTimeout(() => setCopiedScript(false), 2000);
+                  }}
+                  className="btn btn-copy"
+                  style={{
+                    background: copiedScript ? 'rgba(0, 255, 135, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                    border: copiedScript ? '1px solid rgba(0, 255, 135, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    color: copiedScript ? 'var(--neon-success)' : '#fff',
+                    padding: '4px 10px',
+                    fontSize: '11.5px',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {copiedScript ? '✓ Copied!' : 'Copy Script Code'}
+                </button>
+              </div>
+
+              <pre style={{
+                background: 'rgba(0, 0, 0, 0.4)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '8px',
+                padding: '16px',
+                color: '#e2e8f0',
+                fontFamily: 'Consolas, Monaco, monospace',
+                fontSize: '11.5px',
+                overflowX: 'auto',
+                maxHeight: '220px',
+                whiteSpace: 'pre',
+                margin: '0 0 20px 0'
+              }}>
+                {appsScriptCode}
+              </pre>
+
+              <button 
+                onClick={() => setShowGmailSetupModal(false)}
+                className="btn btn-primary btn-full"
+                style={{ width: '100%' }}
+              >
+                Close and Return to Workspace
+              </button>
             </div>
           </div>
         </div>

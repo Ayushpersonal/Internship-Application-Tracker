@@ -1,13 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
-  ArrowRight, 
   LogIn,
-  LogOut,
-  AlertCircle,
-  Loader2,
-  Kanban,
-  Mail,
-  ShieldCheck
+  LogOut
 } from 'lucide-react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db } from './firebase';
@@ -23,88 +17,21 @@ import {
   doc,
   setDoc,
   onSnapshot,
-  serverTimestamp
+  serverTimestamp,
+  collection
 } from 'firebase/firestore';
+
+import './AntiGravityKanban.css';
 
 // Component Pages
 import TrackerPage from './TrackerPage';
 import OutreachPage from './OutreachPage';
 import ResumePage from './ResumePage';
-import CalendarPage from './CalendarPage';
 import AIInterviewPage from './AIInterviewPage';
 import LandingPage from './LandingPage';
 import LoginPage from './LoginPage';
 
-// Mini Mockup Components for Hero/Bento Landing Page
-function MiniKanbanMockup() {
-  const [mockCards, setMockCards] = useState([
-    { id: 1, company: 'Google', role: 'SWE Intern', status: 'applied', tag: 'High Priority', tagClass: 'tag-high' },
-    { id: 2, company: 'Stripe', role: 'Backend Eng', status: 'interviewing', tag: 'Technical Round', tagClass: 'tag-tech' },
-    { id: 3, company: 'Vercel', role: 'Frontend Intern', status: 'offer', tag: 'Active Offer', tagClass: 'tag-success' },
-  ]);
 
-  const moveCard = (id) => {
-    setMockCards(prev => prev.map(c => {
-      if (c.id === id) {
-        const nextStatus = c.status === 'applied' ? 'interviewing' : (c.status === 'interviewing' ? 'offer' : 'applied');
-        const nextTag = nextStatus === 'applied' ? 'High Priority' : (nextStatus === 'interviewing' ? 'Technical Round' : 'Active Offer');
-        const nextTagClass = nextStatus === 'applied' ? 'tag-high' : (nextStatus === 'interviewing' ? 'tag-tech' : 'tag-success');
-        return { ...c, status: nextStatus, tag: nextTag, tagClass: nextTagClass };
-      }
-      return c;
-    }));
-  };
-
-  return (
-    <div className="mini-kanban-board">
-      {['applied', 'interviewing', 'offer'].map(col => (
-        <div key={col} className="mini-kanban-column">
-          <h4 style={{ textTransform: 'uppercase' }}>{col}</h4>
-          {mockCards.filter(c => c.status === col).map(c => (
-            <div key={c.id} className="mini-kanban-card">
-              <div className="mini-card-header">
-                <span className="mini-card-company">{c.company}</span>
-                <button className="mini-card-btn" onClick={() => moveCard(c.id)} title="Move stage">
-                  <ArrowRight size={10} />
-                </button>
-              </div>
-              <span className="mini-card-role">{c.role}</span>
-              <span className={`mini-card-tag ${c.tagClass}`}>{c.tag}</span>
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MiniOutreachMockup() {
-  const [tone, setTone] = useState('professional');
-  const templates = {
-    professional: "Dear Hiring Team,\n\nI am writing to express my interest in the Software Engineer Intern position at Stripe. With background in building React SaaS dashboards, I am excited about the opportunity...",
-    warm: "Hi Sarah!\n\nI've been following Stripe's engineering culture and love how developer-first you guys are. I'd love to connect and learn about potential internship roles...",
-    concise: "Hi Sarah,\n\nQuick query: Do you have openings for SWE Interns this summer? Specialized in React/Node. Portfolio: portfolio.com. Let me know if you have 5 mins to chat.\n\nBest,\nSavit"
-  };
-
-  return (
-    <div className="mini-outreach">
-      <div className="mini-outreach-tones">
-        {['professional', 'warm', 'concise'].map(t => (
-          <button 
-            key={t} 
-            className={`mini-tone-btn ${tone === t ? 'active' : ''}`}
-            onClick={() => setTone(t)}
-          >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </div>
-      <div className="mini-outreach-preview">
-        {templates[tone]}
-      </div>
-    </div>
-  );
-}
 
 export default function App() {
   const canvasRef = useRef(null);
@@ -254,7 +181,7 @@ export default function App() {
         const user = JSON.parse(savedUser);
         return user.isMock ? 'sandbox' : 'production';
       }
-    } catch {}
+    } catch { /* ignored */ }
     return 'sandbox';
   });
 
@@ -438,7 +365,7 @@ export default function App() {
         const cached = localStorage.getItem(`applications_${userKey}`);
         if (cached) return patchApps(JSON.parse(cached));
       }
-    } catch (e) {}
+    } catch { /* ignored */ }
     return DEFAULT_APPS;
   });
 
@@ -470,7 +397,7 @@ export default function App() {
         // Keep localStorage cache fresh
         try {
           localStorage.setItem(`applications_${currentUser.uid}`, JSON.stringify(patchedApps));
-        } catch (e) {}
+        } catch { /* ignored */ }
       } else {
         // No cloud document yet — seed Firestore with current local data
         const localCached = localStorage.getItem(`applications_${currentUser.uid}`);
@@ -489,6 +416,83 @@ export default function App() {
     return () => unsubscribe();
   }, [currentUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Firestore real-time listener for decentralized subcollection sync ─────
+  useEffect(() => {
+    // Sandbox/mock users skip Firestore
+    if (!currentUser || currentUser.isMock || !db) return;
+
+    const appsSubCollectionRef = collection(db, 'users', currentUser.uid, 'applications');
+
+    const unsubscribe = onSnapshot(appsSubCollectionRef, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const docData = change.doc.data();
+          const docId = change.doc.id;
+          
+          const company = docData.company?.stringValue || docData.company || '';
+          const title = docData.title?.stringValue || docData.title || '';
+          const stage = docData.stage?.stringValue || docData.stage || 'Applied';
+          const updatedAt = docData.updatedAt ? new Date(docData.updatedAt).toISOString() : new Date().toISOString();
+          
+          if (!company) return;
+
+          setApplications(prev => {
+            // Check if card with this company already exists (case-insensitive) or has this docId
+            const existsIndex = prev.findIndex(app => app.id === docId || app.company.toLowerCase() === company.toLowerCase());
+            
+            // Map stage from "Applied"/"Interviewing"/"Offer Received" to kanban status "applied"/"interviewing"/"offer"
+            let status = 'applied';
+            let priority = 'High Priority';
+            if (stage === 'Interviewing' || stage === 'interviewing') {
+              status = 'interviewing';
+              priority = 'Technical Round';
+            } else if (stage === 'Offer Received' || stage === 'Offer' || stage === 'offer') {
+              status = 'offer';
+              priority = 'Active Offer';
+            }
+
+            if (existsIndex >= 0) {
+              const existingApp = prev[existsIndex];
+              // Only update if stage or role changed
+              if (existingApp.status !== status || existingApp.role !== title) {
+                const updated = [...prev];
+                updated[existsIndex] = {
+                  ...existingApp,
+                  role: title || existingApp.role,
+                  status: status,
+                  priority: status === 'offer' ? 'Active Offer' : existingApp.priority,
+                  animateTrigger: true // Trigger animation!
+                };
+                return updated;
+              }
+              return prev;
+            } else {
+              // Add new application
+              const newApp = {
+                id: docId,
+                company: company,
+                role: title || 'Synced App',
+                status: status,
+                priority: priority,
+                logoLetter: company.charAt(0).toUpperCase(),
+                customBg: 'linear-gradient(135deg, #06b6d4, #8b5cf6)',
+                appliedDate: new Date(updatedAt).toISOString().split('T')[0],
+                followUp3Done: false,
+                followUp7Done: false,
+                animateTrigger: true // Trigger animation!
+              };
+              return [...prev, newApp];
+            }
+          });
+        }
+      });
+    }, (err) => {
+      console.warn('Firestore subcollection listener error:', err.message);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
   // ── Debounced save to Firestore + localStorage ────────────────────────────
   // Fires 1.5s after the last change to avoid hammering Firestore on rapid updates.
   useEffect(() => {
@@ -497,7 +501,7 @@ export default function App() {
       if (currentUser?.isMock) {
         try {
           localStorage.setItem(`applications_${currentUser.uid}`, JSON.stringify(applications));
-        } catch (e) {}
+        } catch { /* ignored */ }
       }
       return;
     }
@@ -505,7 +509,7 @@ export default function App() {
     // Always update localStorage cache immediately
     try {
       localStorage.setItem(`applications_${currentUser.uid}`, JSON.stringify(applications));
-    } catch (e) {}
+    } catch { /* ignored */ }
 
     // Debounce Firestore writes
     setCloudSyncStatus('saving');
@@ -705,7 +709,6 @@ export default function App() {
     `Software Engineer Intern - Frontend & Backend\nRequirements:\n- Proficient in JavaScript/TypeScript\n- Deep understanding of modern React / Next.js\n- Experience building RESTful APIs using Node/Express\n- Strong CSS foundation and Responsive Design layouts\n- Knowledge of relational and non-relational databases`
   );
 
-  const [matchScore, setMatchScore] = useState(92);
   const [scoreAnimationVal, setScoreAnimationVal] = useState(92);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
@@ -747,7 +750,7 @@ export default function App() {
     }
     calculatedScore = Math.max(50, Math.min(99, calculatedScore));
 
-    setMatchScore(calculatedScore);
+    // Removed unused matchScore setter
 
     let tick = 0;
     const ticker = setInterval(() => {

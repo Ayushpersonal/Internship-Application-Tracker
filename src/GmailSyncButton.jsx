@@ -1,9 +1,7 @@
-import React, { useRef } from 'react';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || null;
 
-export default function GmailSyncButton({ accessToken, userId, setApplications, setGmailToken, currentUser, syncing, setSyncing }) {
-  const tokenClientRef = useRef(null);
+export default function GmailSyncButton({ accessToken, setApplications, setGmailToken, currentUser, syncing, setSyncing }) {
 
   /**
    * Load the Google API (GAPI) client library dynamically.
@@ -34,11 +32,11 @@ export default function GmailSyncButton({ accessToken, userId, setApplications, 
    */
   const parseEmailForCompany = (subject, snippet) => {
     const patterns = [
-      /Your application to\s+([a-zA-Z0-9\s&'.,\-]+?)(?:\s+(?:was|has|is|confirmed|received|sent|viewed)\b|$)/i,
-      /\bat\s+([a-zA-Z0-9\s&'.,\-]+?)(?:\s*[\-\–\|]|\s+(?:was|has|is|confirmed|received|sent|viewed|in|on)\b|$)/i,
-      /(?:Update|Message|Invitation)\s+from\s+([a-zA-Z0-9\s&'.,\-]+?)(?:\s+(?:about|for|regarding|is|has|was)\b|$)/i,
-      /application\s+(?:for|to)\s+([a-zA-Z0-9\s&'.,\-]+?)(?:\s+(?:has|was|is)\b|\s*[-|]|$)/i,
-      /(?:Company|Employer|at):\s*([a-zA-Z0-9\s&'.,\-]+?)(?:\r|\n|-|–|\||$)/i
+      /Your application to\s+([a-zA-Z0-9\s&'.,-]+?)(?:\s+(?:was|has|is|confirmed|received|sent|viewed)\b|$)/i,
+      /\bat\s+([a-zA-Z0-9\s&'.,-]+?)(?:\s*[-–|]|\s+(?:was|has|is|confirmed|received|sent|viewed|in|on)\b|$)/i,
+      /(?:Update|Message|Invitation)\s+from\s+([a-zA-Z0-9\s&'.,-]+?)(?:\s+(?:about|for|regarding|is|has|was)\b|$)/i,
+      /application\s+(?:for|to)\s+([a-zA-Z0-9\s&'.,-]+?)(?:\s+(?:has|was|is)\b|\s*[-|]|$)/i,
+      /(?:Company|Employer|at):\s*([a-zA-Z0-9\s&'.,-]+?)(?:\r|\n|-|–|\||$)/i
     ];
 
     for (const pattern of patterns) {
@@ -73,11 +71,11 @@ export default function GmailSyncButton({ accessToken, userId, setApplications, 
     
     // Pattern 1: Match role description phrases
     const patterns = [
-      /position\s+of\s+([a-zA-Z0-9\s&\-\/]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
-      /application\s+(?:for|to)\s+(?:the\s+)?([a-zA-Z0-9\s&\-\/]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
-      /applying\s+(?:for|to)\s+(?:the\s+)?([a-zA-Z0-9\s&\-\/]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
-      /role\s+as\s+(?:a\s+)?([a-zA-Z0-9\s&\-\/]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
-      /job\s+title\s*:\s*([a-zA-Z0-9\s&\-\/]+)/i
+      /position\s+of\s+([a-zA-Z0-9\s&/-]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
+      /application\s+(?:for|to)\s+(?:the\s+)?([a-zA-Z0-9\s&/-]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
+      /applying\s+(?:for|to)\s+(?:the\s+)?([a-zA-Z0-9\s&/-]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
+      /role\s+as\s+(?:a\s+)?([a-zA-Z0-9\s&/-]+?\b(?:intern|internship|engineer|developer|designer|manager|specialist|analyst|architect|fellow|associate|lead|scientist|researcher)\b)/i,
+      /job\s+title\s*:\s*([a-zA-Z0-9\s&/-]+)/i
     ];
 
     for (const pattern of patterns) {
