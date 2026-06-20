@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
+import {
   LogIn,
   LogOut
 } from 'lucide-react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db } from './firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
   signInWithPopup,
   GoogleAuthProvider
@@ -45,7 +45,7 @@ export default function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
+
     let stars = [];
     const starCount = 120;
     let width = (canvas.width = window.innerWidth);
@@ -168,7 +168,10 @@ export default function App() {
 
   const [showDashboard, setShowDashboard] = useState(() => {
     try {
-      return localStorage.getItem('currentUser') !== null;
+      const hasUser = localStorage.getItem('currentUser') !== null;
+      if (!hasUser) return false;
+      const savedShow = localStorage.getItem('showDashboard');
+      return savedShow !== 'false';
     } catch {
       return false;
     }
@@ -192,15 +195,32 @@ export default function App() {
     try {
       if (currentUser) {
         localStorage.setItem('currentUser', JSON.stringify(currentUser));
-        setShowDashboard(true);
+        const savedShow = localStorage.getItem('showDashboard');
+        if (savedShow === null) {
+          setShowDashboard(true);
+        } else {
+          setShowDashboard(savedShow === 'true');
+        }
       } else {
         localStorage.removeItem('currentUser');
+        localStorage.removeItem('showDashboard');
         setShowDashboard(false);
       }
     } catch (e) {
       console.warn(e);
     }
   }, [currentUser]);
+
+  // Sync showDashboard to localStorage when it changes
+  useEffect(() => {
+    try {
+      if (currentUser) {
+        localStorage.setItem('showDashboard', showDashboard ? 'true' : 'false');
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+  }, [showDashboard, currentUser]);
 
   // Synchronize dashboard view when accessing sub-pages directly while logged in
   useEffect(() => {
@@ -211,7 +231,7 @@ export default function App() {
 
   // Auth Listener
   useEffect(() => {
-    let unsubscribe = () => {};
+    let unsubscribe = () => { };
     try {
       if (auth) {
         unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -428,18 +448,18 @@ export default function App() {
         if (change.type === 'added' || change.type === 'modified') {
           const docData = change.doc.data();
           const docId = change.doc.id;
-          
+
           const company = docData.company?.stringValue || docData.company || '';
           const title = docData.title?.stringValue || docData.title || '';
           const stage = docData.stage?.stringValue || docData.stage || 'Applied';
           const updatedAt = docData.updatedAt ? new Date(docData.updatedAt).toISOString() : new Date().toISOString();
-          
+
           if (!company) return;
 
           setApplications(prev => {
             // Check if card with this company already exists (case-insensitive) or has this docId
             const existsIndex = prev.findIndex(app => app.id === docId || app.company.toLowerCase() === company.toLowerCase());
-            
+
             // Map stage from "Applied"/"Interviewing"/"Offer Received" to kanban status "applied"/"interviewing"/"offer"
             let status = 'applied';
             let priority = 'High Priority';
@@ -542,8 +562,8 @@ export default function App() {
 
   const totalAppsCount = applications.length;
   const successRate = totalAppsCount > 0 ? Math.round((offerApps.length / totalAppsCount) * 100) : 0;
-  const progressPercent = totalAppsCount > 0 
-    ? Math.round(((interviewingApps.length * 0.5 + offerApps.length) / totalAppsCount) * 100) 
+  const progressPercent = totalAppsCount > 0
+    ? Math.round(((interviewingApps.length * 0.5 + offerApps.length) / totalAppsCount) * 100)
     : 0;
 
   const handleMoveItem = (itemId, targetStatus) => {
@@ -574,13 +594,13 @@ export default function App() {
     if (!newCompany.trim() || !newRole.trim()) return;
 
     const newId = 'app-' + newCompany.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now().toString().slice(-4);
-    
+
     const colors = [
       'linear-gradient(135deg, #a855f7, #6366f1)',
       'linear-gradient(135deg, #ec4899, #f43f5e)',
       'linear-gradient(135deg, #10b981, #059669)',
       'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-      'linear-gradient(135deg, #f59e0b, #d97706)'
+      'linear-gradient(135deg, #2C92C9, #1e78a6)'
     ];
     const customBg = colors[Math.floor(Math.random() * colors.length)];
 
@@ -637,12 +657,12 @@ export default function App() {
   const [recruiterCompany, setRecruiterCompany] = useState('Stripe');
   const [outreachRole, setOutreachRole] = useState('Software Engineer Intern');
   const [outreachTone, setOutreachTone] = useState('professional');
-  
+
   const [emailSubject, setEmailSubject] = useState('Outreach - Software Engineer Intern Application');
   const [emailBodyDisplay, setEmailBodyDisplay] = useState(
     `Subject: Software Engineer Intern Role - Stripe\n\nDear Sarah,\n\nI hope this email finds you well. \n\nI am a passionate software engineering student deeply inspired by Stripe's developer-first financial infrastructure. Having built complex frontend-backend projects integrated with Stripe API, I'm reaching out to see if you have any open roles for a Software Engineer Intern.\n\nI have attached my resume and portfolio which showcases my deep alignment with Stripe's technical engineering principles. I would love to connect for 10 minutes to discuss how my skill set can contribute to the core payment infrastructure.\n\nThank you so much for your time and consideration.\n\nBest regards,\n[Your Name]`
   );
-  
+
   const [isTyping, setIsTyping] = useState(false);
   const [copiedState, setCopiedState] = useState(false);
 
@@ -661,9 +681,9 @@ export default function App() {
 
     const templates = {
       professional: `Subject: ${subjects.professional}\n\nDear ${rName},\n\nI hope this email finds you well. \n\nI am a passionate software engineering student deeply inspired by ${rCompany}'s industry leadership. Having built high-fidelity frontend applications and interactive web systems, I'm reaching out to see if you have any open roles for a ${rRole} on your engineering team.\n\nI have attached my resume and portfolio, which showcases my deep alignment with ${rCompany}'s technical requirements. I would love to connect for 10 minutes to discuss how my skill set can contribute to your core developments.\n\nThank you so much for your time and consideration.\n\nBest regards,\n[Your Name]`,
-      
+
       warm: `Subject: ${subjects.warm}\n\nDear ${rName},\n\nI hope you're having a wonderful week! \n\nI’m reaching out because I’ve been following ${rCompany}’s engineering growth for a long time, and I am absolutely blown away by your technical culture. As a computer science student passionate about user-centric UI/UX and solid backend architecture, my dream is to learn and contribute as a ${rRole}.\n\nI’ve built several projects inspired directly by products that ${rCompany} builds. I would be incredibly grateful to jump on a quick 5-minute call just to learn more about your career path at ${rCompany} and see if there are internship openings for this summer.\n\nThank you for inspiring the next generation of engineers!\n\nWarmest regards,\n[Your Name]`,
-      
+
       concise: `Subject: ${subjects.concise}\n\nDear ${rName},\n\nI'm a software engineering student looking for a ${rRole} opportunity at ${rCompany} this summer.\n\nI specialize in clean React architectures, responsive layouts, and robust Node backends. Here is what I bring to the table:\n- Rapid developer skills (built 4+ complex applications)\n- Deep understanding of modern UI/UX engineering workflows\n- Self-starter attitude\n\nMy portfolio is attached. Do you have 10 minutes this week for a brief introductory call?\n\nBest,\n[Your Name]`
     };
 
@@ -675,9 +695,9 @@ export default function App() {
 
     let charIndex = 0;
     setEmailBodyDisplay('');
-    
+
     const typingInterval = finalBody.length > 500 ? 2 : 4;
-    
+
     const type = () => {
       if (charIndex < finalBody.length) {
         setEmailBodyDisplay(prev => prev + finalBody.charAt(charIndex));
@@ -687,7 +707,7 @@ export default function App() {
         setIsTyping(false);
       }
     };
-    
+
     type();
   };
 
@@ -704,7 +724,7 @@ export default function App() {
   const [resumeText, setResumeText] = useState(
     `Savit - CS Student at Top University\nTechnical Skills: JavaScript, React, Next.js, Node.js, Express, Postgres, MongoDB, RESTful APIs, Git, Docker, HTML5, Vanilla CSS, Tailwind, Responsive Web Design, Unit Testing, Agile methodologies.\nProjects: Built an e-commerce platform and an open-source collaborative task manager using Vite and WebSocket.`
   );
-  
+
   const [jdText, setJdText] = useState(
     `Software Engineer Intern - Frontend & Backend\nRequirements:\n- Proficient in JavaScript/TypeScript\n- Deep understanding of modern React / Next.js\n- Experience building RESTful APIs using Node/Express\n- Strong CSS foundation and Responsive Design layouts\n- Knowledge of relational and non-relational databases`
   );
@@ -725,8 +745,8 @@ export default function App() {
     const jText = jdText.toLowerCase();
 
     const keywords = [
-      'javascript', 'typescript', 'react', 'next.js', 'node', 'express', 
-      'css', 'html', 'tailwind', 'database', 'restful api', 'mongodb', 
+      'javascript', 'typescript', 'react', 'next.js', 'node', 'express',
+      'css', 'html', 'tailwind', 'database', 'restful api', 'mongodb',
       'postgres', 'git', 'docker', 'ui', 'ux', 'responsive'
     ];
 
@@ -784,8 +804,8 @@ export default function App() {
     };
     return {
       color: 'var(--neon-gold)',
-      borderColor: 'rgba(255, 170, 0, 0.3)',
-      background: 'rgba(255, 170, 0, 0.1)'
+      borderColor: 'rgba(44, 146, 201, 0.3)',
+      background: 'rgba(44, 146, 201, 0.1)'
     };
   };
 
@@ -794,7 +814,7 @@ export default function App() {
   // ==========================================
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
   const [quickTaskText, setQuickTaskText] = useState('');
-  
+
   const [agendaDatabase, setAgendaDatabase] = useState({
     2: [
       { title: 'Submit Google Online Assessment (OA)', time: '10:00 AM', done: true },
@@ -827,7 +847,7 @@ export default function App() {
         const calendarDate = new Date(2026, 5, dayNum); // June 2026
         const diffTime = calendarDate.getTime() - appliedDateObj.getTime();
         const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-        
+
         if (diffDays === 3) {
           autoTasks.push({
             title: `Send follow-up email to ${app.company} (3 days after applying)`,
@@ -970,23 +990,11 @@ export default function App() {
       {/* Main Header */}
       <header className="main-header" id="site-header">
         <div className="header-container">
-          <Link to="/" className="logo-area" id="header-logo-link" style={{ textDecoration: 'none' }}>
-            <div className="logo-icon">
-              <svg viewBox="0 0 100 100" className="svg-logo">
-                <polygon points="20,80 50,20 80,80 50,60" fill="url(#logo-gradient)"></polygon>
-                <circle cx="50" cy="50" r="10" fill="#ffffff" className="logo-core"></circle>
-                <defs>
-                  <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#00f0ff" />
-                    <stop offset="50%" stopColor="#7000ff" />
-                    <stop offset="100%" stopColor="#ff007b" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
+          <Link to="/" className="logo-area" id="header-logo-link" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <img src="/logo.png" alt="CareerFly Logo" style={{ height: '52px', objectFit: 'contain' }} />
             <span className="logo-text">CareerFly</span>
           </Link>
-          
+
           <nav className="nav-menu" id="header-nav-menu">
             {showDashboard ? (
               <>
@@ -1003,13 +1011,13 @@ export default function App() {
               </>
             )}
           </nav>
-          
+
           <div className="header-actions">
             {showDashboard ? (
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <Link 
-                  to="/" 
-                  className="btn btn-secondary btn-header" 
+                <Link
+                  to="/"
+                  className="btn btn-secondary btn-header"
                   style={{ textDecoration: 'none' }}
                   onClick={() => setShowDashboard(false)}
                 >
@@ -1024,9 +1032,9 @@ export default function App() {
                       <span
                         title={
                           cloudSyncStatus === 'saving' ? 'Saving to cloud...' :
-                          cloudSyncStatus === 'saved' ? 'Synced to cloud ✓' :
-                          cloudSyncStatus === 'error' ? 'Cloud sync failed (data saved locally)' :
-                          'Cloud sync ready'
+                            cloudSyncStatus === 'saved' ? 'Synced to cloud ✓' :
+                              cloudSyncStatus === 'error' ? 'Cloud sync failed (data saved locally)' :
+                                'Cloud sync ready'
                         }
                         style={{
                           display: 'inline-flex',
@@ -1040,32 +1048,31 @@ export default function App() {
                           transition: 'all 0.4s ease',
                           background:
                             cloudSyncStatus === 'saving' ? 'rgba(251,191,36,0.15)' :
-                            cloudSyncStatus === 'saved' ? 'rgba(0,255,135,0.12)' :
-                            cloudSyncStatus === 'error' ? 'rgba(255,80,80,0.12)' :
-                            'rgba(255,255,255,0.05)',
+                              cloudSyncStatus === 'saved' ? 'rgba(0,255,135,0.12)' :
+                                cloudSyncStatus === 'error' ? 'rgba(255,80,80,0.12)' :
+                                  'rgba(255,255,255,0.05)',
                           color:
                             cloudSyncStatus === 'saving' ? '#fbbf24' :
-                            cloudSyncStatus === 'saved' ? 'var(--neon-success)' :
-                            cloudSyncStatus === 'error' ? '#ff5050' :
-                            'rgba(255,255,255,0.3)',
-                          border: `1px solid ${
-                            cloudSyncStatus === 'saving' ? 'rgba(251,191,36,0.3)' :
+                              cloudSyncStatus === 'saved' ? 'var(--neon-success)' :
+                                cloudSyncStatus === 'error' ? '#ff5050' :
+                                  'rgba(255,255,255,0.3)',
+                          border: `1px solid ${cloudSyncStatus === 'saving' ? 'rgba(251,191,36,0.3)' :
                             cloudSyncStatus === 'saved' ? 'rgba(0,255,135,0.25)' :
-                            cloudSyncStatus === 'error' ? 'rgba(255,80,80,0.3)' :
-                            'rgba(255,255,255,0.08)'
-                          }`
+                              cloudSyncStatus === 'error' ? 'rgba(255,80,80,0.3)' :
+                                'rgba(255,255,255,0.08)'
+                            }`
                         }}
                       >
                         {cloudSyncStatus === 'saving' ? '↻ Saving' :
-                         cloudSyncStatus === 'saved' ? '☁ Saved' :
-                         cloudSyncStatus === 'error' ? '⚠ Offline' :
-                         '☁ Ready'}
+                          cloudSyncStatus === 'saved' ? '☁ Saved' :
+                            cloudSyncStatus === 'error' ? '⚠ Offline' :
+                              '☁ Ready'}
                       </span>
                     )}
                   </span>
                 )}
-                <button 
-                  className="btn btn-secondary btn-header" 
+                <button
+                  className="btn btn-secondary btn-header"
                   id="btn-logout"
                   onClick={handleLogout}
                 >
@@ -1077,14 +1084,14 @@ export default function App() {
               <>
                 {currentUser ? (
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <button 
-                      className="btn btn-primary btn-header btn-glow" 
+                    <button
+                      className="btn btn-primary btn-header btn-glow"
                       onClick={() => setShowDashboard(true)}
                     >
                       Enter Workspace
                     </button>
-                    <button 
-                      className="btn btn-secondary btn-header" 
+                    <button
+                      className="btn btn-secondary btn-header"
                       id="btn-logout"
                       onClick={handleLogout}
                     >
@@ -1093,16 +1100,16 @@ export default function App() {
                   </div>
                 ) : (
                   <>
-                    <Link 
+                    <Link
                       to="/login"
-                      className="btn btn-secondary btn-header" 
+                      className="btn btn-secondary btn-header"
                       id="btn-login-header"
                       style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                     >
                       <LogIn size={14} /> Login
                     </Link>
-                    <button 
-                      className="btn btn-primary btn-header btn-glow" 
+                    <button
+                      className="btn btn-primary btn-header btn-glow"
                       onClick={() => {
                         handleLaunchSandbox();
                       }}
@@ -1124,7 +1131,7 @@ export default function App() {
               <AIInterviewPage currentUser={currentUser} isFirebaseMock={isFirebaseMock} />
             ) : <Navigate to="/login?redirect=/interview" replace />
           } />
-          
+
           <Route path="/outreach" element={
             currentUser ? (
               <OutreachPage
@@ -1229,9 +1236,11 @@ export default function App() {
               <LandingPage
                 currentUser={currentUser}
                 handleLaunchSandbox={handleLaunchSandbox}
+                handleLogout={handleLogout}
                 envMode={envMode}
                 setEnvMode={setEnvMode}
                 terminalLogs={terminalLogs}
+                setShowDashboard={setShowDashboard}
               />
             )
           } />
@@ -1242,23 +1251,15 @@ export default function App() {
       <footer className="main-footer">
         <div className="footer-container">
           <div className="footer-left">
-            <div className="footer-logo">
-              <svg viewBox="0 0 100 100" width="24" height="24">
-                <polygon points="20,80 50,20 80,80 50,60" fill="url(#footer-logo-grad)"></polygon>
-                <defs>
-                  <linearGradient id="footer-logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#00f0ff" />
-                    <stop offset="100%" stopColor="#ff007b" />
-                  </linearGradient>
-                </defs>
-              </svg>
+            <div className="footer-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <img src="/logo.png" alt="CareerFly Logo" style={{ height: '70px', objectFit: 'contain' }} />
               <span>CareerFly</span>
             </div>
             <p className="footer-copyright">
               © 2026 CareerFly SaaS. Engineered for Google DeepMind Coding Challenge. All rights reserved.
             </p>
           </div>
-          
+
           <div className="footer-right">
             <div className="footer-links-group">
               <Link to="/" className="footer-link">Tracker</Link>
