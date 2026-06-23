@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   LogIn,
-  LogOut
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { auth, googleProvider, db } from './firebase';
@@ -37,6 +39,22 @@ export default function App() {
   const canvasRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const [appMobileMenuOpen, setAppMobileMenuOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setAppMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // Lock body scroll when app mobile menu is open
+  useEffect(() => {
+    if (appMobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [appMobileMenuOpen]);
 
   // ==========================================
   // STARFIELD BACKGROUND ANIMATION
@@ -998,9 +1016,9 @@ export default function App() {
           <nav className="nav-menu" id="header-nav-menu">
             {showDashboard ? (
               <>
-                <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>Manage Internship</Link>
-                <Link to="/outreach" className={`nav-link ${location.pathname === '/outreach' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>AI Outreach</Link>
-                <Link to="/resume" className={`nav-link ${location.pathname === '/resume' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>Resume Analyzer</Link>
+                <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>Manage Internships</Link>
+                <Link to="/outreach" className={`nav-link ${location.pathname === '/outreach' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>Cold Outreach</Link>
+                <Link to="/resume" className={`nav-link ${location.pathname === '/resume' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>Resume ATS</Link>
                 <Link to="/interview" className={`nav-link ${location.pathname === '/interview' ? 'active' : ''}`} style={{ textDecoration: 'none' }}>AI Interview</Link>
               </>
             ) : (
@@ -1015,14 +1033,6 @@ export default function App() {
           <div className="header-actions">
             {showDashboard ? (
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <Link
-                  to="/"
-                  className="btn btn-secondary btn-header"
-                  style={{ textDecoration: 'none' }}
-                  onClick={() => setShowDashboard(false)}
-                >
-                  Back to Website
-                </Link>
                 {currentUser && (
                   <span className="user-display-email" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {currentUser.isMock && <span style={{ color: 'var(--neon-gold)', marginRight: '4px' }}>[Sandbox]</span>}
@@ -1118,6 +1128,80 @@ export default function App() {
                     </button>
                   </>
                 )}
+              </>
+            )}
+          </div>
+
+          {/* Hamburger — mobile only */}
+          <button
+            className="app-hamburger"
+            onClick={() => setAppMobileMenuOpen(o => !o)}
+            aria-label={appMobileMenuOpen ? 'Close menu' : 'Open menu'}
+          >
+            {appMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+
+        {/* ── APP MOBILE DRAWER ── */}
+        <div className={`app-mobile-drawer ${appMobileMenuOpen ? 'app-mobile-drawer--open' : ''}`}>
+          {showDashboard ? (
+            <nav className="app-mobile-nav">
+              <Link to="/" className={`app-mobile-nav-link ${location.pathname === '/' ? 'active' : ''}`} onClick={() => setAppMobileMenuOpen(false)}>Manage Internships</Link>
+              <Link to="/outreach" className={`app-mobile-nav-link ${location.pathname === '/outreach' ? 'active' : ''}`} onClick={() => setAppMobileMenuOpen(false)}>Cold Outreach</Link>
+              <Link to="/resume" className={`app-mobile-nav-link ${location.pathname === '/resume' ? 'active' : ''}`} onClick={() => setAppMobileMenuOpen(false)}>Resume ATS</Link>
+              <Link to="/interview" className={`app-mobile-nav-link ${location.pathname === '/interview' ? 'active' : ''}`} onClick={() => setAppMobileMenuOpen(false)}>AI Interview</Link>
+            </nav>
+          ) : null}
+          <div className="app-mobile-actions">
+            {showDashboard ? (
+              <>
+                {currentUser && (
+                  <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.5)', textAlign: 'center', padding: '4px 0' }}>
+                    {currentUser.isMock ? '🟡 Sandbox Mode' : currentUser.email}
+                  </div>
+                )}
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => { handleLogout(); setAppMobileMenuOpen(false); }}
+                >
+                  <LogOut size={14} /> Logout
+                </button>
+              </>
+            ) : currentUser ? (
+              <>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => { setShowDashboard(true); setAppMobileMenuOpen(false); }}
+                >
+                  Enter Workspace
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => { handleLogout(); setAppMobileMenuOpen(false); }}
+                >
+                  <LogOut size={14} /> Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="btn btn-secondary"
+                  style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}
+                  onClick={() => setAppMobileMenuOpen(false)}
+                >
+                  <LogIn size={14} /> Login
+                </Link>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => { handleLaunchSandbox(); setAppMobileMenuOpen(false); }}
+                >
+                  Launch Sandbox
+                </button>
               </>
             )}
           </div>

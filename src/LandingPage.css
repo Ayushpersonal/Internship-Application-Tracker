@@ -986,37 +986,336 @@ body.landing-page-active .nebula {
     color: #ffffff;
 }
 
-/* Responsiveness overrides */
+/* =============================================
+   HAMBURGER & MOBILE DRAWER
+   ============================================= */
+
+/* Hide hamburger on desktop */
+.lp-hamburger {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--uteach-dark);
+    padding: 6px;
+    border-radius: 8px;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+    z-index: 1100;
+}
+
+.lp-hamburger:hover {
+    background: rgba(44, 146, 201, 0.08);
+}
+
+/* Mobile drawer — hidden by default */
+.lp-mobile-drawer {
+    display: none;
+    flex-direction: column;
+    background: #E1FFFA;
+    border-top: 1px solid var(--uteach-border);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), padding 0.35s ease;
+    padding: 0 24px;
+}
+
+.lp-mobile-drawer--open {
+    max-height: 600px;
+    padding: 20px 24px 28px 24px;
+}
+
+.lp-mobile-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 20px;
+}
+
+.lp-mobile-nav-link {
+    text-decoration: none;
+    color: var(--uteach-dark);
+    font-size: 17px;
+    font-weight: 600;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    transition: color 0.2s ease;
+    display: block;
+}
+
+.lp-mobile-nav-link:hover {
+    color: var(--uteach-primary);
+}
+
+.lp-mobile-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* =============================================
+   RESPONSIVE — TABLET (≤ 968px)
+   ============================================= */
 @media (max-width: 968px) {
-    .lp-hero-section, .lp-two-cols, .lp-stats-container, .lp-testimonials-grid, .lp-footer-container {
+
+    /* Header */
+    .lp-nav-links,
+    .lp-nav-actions {
+        display: none;
+    }
+
+    .lp-hamburger {
+        display: flex;
+    }
+
+    .lp-mobile-drawer {
+        display: flex;
+    }
+
+    .lp-nav-container {
+        height: 64px;
+        padding: 0 20px;
+    }
+
+    /* Hero */
+    .lp-hero-section {
+        grid-template-columns: 1fr;
+        padding: 50px 20px 40px;
+        gap: 40px;
+        text-align: center;
+    }
+
+    .lp-hero-content {
+        text-align: center;
+    }
+
+    .lp-hero-title {
+        font-size: 40px;
+    }
+
+    .lp-hero-desc {
+        font-size: 16px;
+    }
+
+    .lp-hero-actions {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .lp-hero-images-container {
+        height: 320px;
+    }
+
+    .lp-teacher-blob-wrapper,
+    .lp-student-blob-wrapper {
+        width: 200px;
+    }
+
+    /* Trusted */
+    .lp-trusted-section {
+        flex-direction: column;
+        gap: 20px;
+        text-align: center;
+        padding: 0 20px 50px;
+    }
+
+    .lp-trusted-text {
+        min-width: unset;
+        text-align: center;
+    }
+
+    /* Sections */
+    .lp-section {
+        padding: 60px 20px;
+    }
+
+    .lp-section-title {
+        font-size: 30px;
+    }
+
+    .lp-two-cols {
         grid-template-columns: 1fr;
         gap: 40px;
         text-align: center;
     }
-    
-    .lp-hero-content, .lp-col-content, .lp-stats-banner, .lp-testimonial-card, .lp-footer-col-title, .lp-footer-links {
+
+    /* RTL two-col trick — reset on mobile */
+    .lp-section-container.lp-two-cols[style*="rtl"] {
+        direction: ltr !important;
+    }
+
+    .lp-col-content {
         text-align: center;
     }
-    
-    .lp-trusted-section {
-        flex-direction: column;
+
+    .lp-col-title {
+        font-size: 28px;
+    }
+
+    .lp-features-list {
+        text-align: left;
+        max-width: 480px;
+        margin: 0 auto 30px auto;
+    }
+
+    .lp-link-arrow {
+        justify-content: center;
+    }
+
+    /* Avatar grid */
+    .lp-avatar-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    /* Stats */
+    .lp-stats-container {
+        grid-template-columns: 1fr;
+        gap: 28px;
+    }
+
+    .lp-stat-item {
+        justify-content: center;
+    }
+
+    /* Testimonials */
+    .lp-testimonials-grid {
+        grid-template-columns: 1fr;
         gap: 20px;
     }
-    
-    .lp-hero-images-container {
-        height: 380px;
+
+    .lp-testimonials-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
     }
-    
-    .lp-teacher-blob-wrapper, .lp-student-blob-wrapper {
-        width: 220px;
+
+    .lp-testimonials-title {
+        font-size: 28px;
     }
-    
+
+    /* Features floating cards — hide on mobile (they overlap weirdly) */
+    .lp-features-floating-card {
+        display: none;
+    }
+
+    /* CTA */
+    .lp-cta-box {
+        padding: 60px 24px;
+    }
+
+    .lp-cta-title {
+        font-size: 30px;
+    }
+
+    /* Hide floating avatars in CTA on mobile */
+    .lp-cta-avatar {
+        display: none;
+    }
+
+    /* Footer */
     .lp-footer-container {
-        justify-items: center;
+        grid-template-columns: 1fr 1fr;
+        gap: 36px;
     }
-    
+
+    .lp-footer-logo-col {
+        grid-column: 1 / -1;
+        align-items: center;
+        text-align: center;
+    }
+
+    .lp-footer-col-title,
+    .lp-footer-links {
+        text-align: center;
+    }
+
     .lp-footer-links {
         align-items: center;
+    }
+
+    .lp-footer-bottom {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
+
+    /* Sandbox button hidden on nav-actions (drawer handles it) */
+    .lp-sandbox-btn {
+        display: none;
+    }
+}
+
+/* =============================================
+   RESPONSIVE — MOBILE (≤ 480px)
+   ============================================= */
+@media (max-width: 480px) {
+
+    .lp-hero-title {
+        font-size: 32px;
+    }
+
+    .lp-hero-desc {
+        font-size: 15px;
+    }
+
+    .lp-hero-actions {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .lp-btn-primary,
+    .lp-btn-secondary {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .lp-hero-images-container {
+        height: 250px;
+    }
+
+    .lp-teacher-blob-wrapper,
+    .lp-student-blob-wrapper {
+        width: 150px;
+    }
+
+    /* Hide floating badges on very small screens */
+    .lp-badge-floating {
+        display: none;
+    }
+
+    .lp-section-title {
+        font-size: 26px;
+    }
+
+    .lp-col-title {
+        font-size: 24px;
+    }
+
+    .lp-cta-title {
+        font-size: 24px;
+    }
+
+    .lp-avatar-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .lp-footer-container {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .lp-footer-links {
+        align-items: center;
+    }
+
+    .lp-footer-bottom-links {
+        gap: 16px;
+    }
+
+    .lp-testimonial-card {
+        padding: 20px;
     }
 }
 

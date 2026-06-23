@@ -14,7 +14,9 @@ import {
   Award,
   Users,
   Cpu,
-  Mail
+  Mail,
+  Menu,
+  X
 } from 'lucide-react';
 import './LandingPage.css';
 
@@ -135,13 +137,27 @@ export default function LandingPage({
   setShowDashboard
 }) {
   const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleGoToDashboard = () => {
     if (setShowDashboard) {
       setShowDashboard(true);
     }
+    setMobileMenuOpen(false);
     navigate('/');
   };
+
+  const closeMobileMenu = () => setMobileMenuOpen(false);
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileMenuOpen]);
 
   // Add body class on mount and remove on unmount
   useEffect(() => {
@@ -196,10 +212,10 @@ export default function LandingPage({
           </Link>
 
           <nav className="lp-nav-links">
-            <a href="#features" className="lp-nav-link">Features</a>
-            <a href="#solutions" className="lp-nav-link">Solutions</a>
-            <a href="#pricing" className="lp-nav-link">Pricing</a>
-            <a href="#resources" className="lp-nav-link">Resources</a>
+            <a href="/" className="lp-nav-link">Manage Internships</a>
+            <a href="/resume" className="lp-nav-link">Resume ATS</a>
+            <a href="/outreach" className="lp-nav-link">Cold Outreach</a>
+            <a href="/interview" className="lp-nav-link">AI Interview</a>
           </nav>
 
           <div className="lp-nav-actions">
@@ -229,8 +245,51 @@ export default function LandingPage({
                     handleLaunchSandbox();
                     navigate('/');
                   }} 
-                  className="lp-btn-secondary"
+                  className="lp-btn-secondary lp-sandbox-btn"
                   style={{ padding: '8px 16px', fontSize: '14px', border: '1px dashed var(--neon-gold)', color: 'var(--neon-gold)' }}
+                >
+                  Launch Sandbox
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Hamburger button — mobile only */}
+          <button
+            className="lp-hamburger"
+            onClick={() => setMobileMenuOpen(o => !o)}
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+          >
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+
+        {/* ── MOBILE DRAWER ── */}
+        <div className={`lp-mobile-drawer ${mobileMenuOpen ? 'lp-mobile-drawer--open' : ''}`}>
+          <nav className="lp-mobile-nav">
+            <a href="/" className="lp-mobile-nav-link" onClick={closeMobileMenu}>Manage Internships</a>
+            <a href="/resume" className="lp-mobile-nav-link" onClick={closeMobileMenu}>Resume ATS</a>
+            <a href="/outreach" className="lp-mobile-nav-link" onClick={closeMobileMenu}>Cold Outreach</a>
+            <a href="/interview" className="lp-mobile-nav-link" onClick={closeMobileMenu}>AI Interview</a>
+          </nav>
+          <div className="lp-mobile-actions">
+            {currentUser ? (
+              <>
+                <button onClick={handleGoToDashboard} className="lp-btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+                  Dashboard <ArrowRight size={16} />
+                </button>
+                <button onClick={() => { handleLogout(); closeMobileMenu(); }} className="lp-btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
+                  Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="lp-btn-secondary" style={{ width: '100%', textAlign: 'center' }} onClick={closeMobileMenu}>Login</Link>
+                <Link to="/login?tab=signup" className="lp-btn-primary" style={{ width: '100%', textAlign: 'center' }} onClick={closeMobileMenu}>Register</Link>
+                <button
+                  onClick={() => { handleLaunchSandbox(); navigate('/'); closeMobileMenu(); }}
+                  className="lp-btn-secondary"
+                  style={{ width: '100%', justifyContent: 'center', border: '1px dashed var(--neon-gold)', color: 'var(--neon-gold)' }}
                 >
                   Launch Sandbox
                 </button>
@@ -245,18 +304,18 @@ export default function LandingPage({
         <div className="lp-hero-content">
           <div className="lp-hero-announcement">
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2C92C9', display: 'inline-block' }}></span>
-            Now in Sandbox Sandbox-V2
+            Now live — AI-powered Internship Tracker v2
           </div>
 
           <h1 className="lp-hero-title">
             <span className="lp-scribble-wrapper">
-              Track
+              Land
               <span className="lp-scribble-line"></span>
-            </span> internships worldwide
+            </span> your dream internship, faster
           </h1>
 
           <p className="lp-hero-desc">
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Elementum dictum egestas tempor suspendisse viverra vel. Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+            CareerFly is your all-in-one AI internship command center. Auto-sync applications from Gmail, track every stage on a Kanban board, match your resume with Edge-AI, and practice mock interviews — all in one privacy-first dashboard.
           </p>
 
           <div className="lp-hero-actions">
